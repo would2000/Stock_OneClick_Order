@@ -1686,7 +1686,7 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                   <table className="denseTable adaptiveTable" style={ordersResize.tableStyle}>
                     <thead>
                       <tr>
-                        {["動作", "商品", "買賣", "價格", "委託", "成交", "剩餘", "狀態", "委託書號"].map((label, index) => (
+                        {["動作", "商品", "買賣", "價格", "委託", "成交", "剩餘", "狀態", "時間", "委託書號"].map((label, index) => (
                           <Th key={label} col={index} resize={ordersResize}>{label}</Th>
                         ))}
                       </tr>
@@ -1741,11 +1741,12 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                                   ? "部份成交"
                                   : "未成交"}
                           </td>
+                          <td>{item.accept_time}</td>
                           <td>{item.order_no}</td>
                         </tr>
                       ))}
                       {displayedOrders.length === 0 ? (
-                        <tr><td colSpan={9}>{yuantaStatus?.connected ? "今日無符合條件的委託。" : "請先連線券商後按「查詢」。"}</td></tr>
+                        <tr><td colSpan={10}>{yuantaStatus?.connected ? "今日無符合條件的委託。" : "請先連線券商後按「查詢」。"}</td></tr>
                       ) : null}
                     </tbody>
                   </table>

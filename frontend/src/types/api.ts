@@ -141,6 +141,7 @@ export type WorkingOrder = {
   ok_qty: number;
   status: string;
   cancelled?: boolean;
+  accept_time?: string; // 委託成立時間
 };
 
 export type TradeRecord2 = {

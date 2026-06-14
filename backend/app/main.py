@@ -7,7 +7,7 @@ from .api.quote_stream import stream_router
 from .api.routes import router
 from .database import init_db
 from .market_data.index_sampler import run_index_sampler
-from .trading.mit import run_mit_engine
+from .trading.mit import clear_stale_mit_orders, run_mit_engine
 from .yuanta.client import get_yuanta_client
 
 
@@ -25,6 +25,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup() -> None:
     init_db()
+    clear_stale_mit_orders()  # 啟動時換日清空非今日 MIT
     app.state.mit_engine_task = asyncio.create_task(run_mit_engine())
     app.state.index_sampler_task = asyncio.create_task(run_index_sampler())
 

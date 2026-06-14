@@ -103,6 +103,7 @@ class WorkingOrder(BaseModel):
     ok_qty: int = 0
     status: str = ""
     cancelled: bool = False
+    accept_time: str = ""  # 委託成立時間（sim 記下單時間、real 取 AcceptDate/AcceptTime）
 
 
 class TradeRecord(BaseModel):

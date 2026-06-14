@@ -10,7 +10,7 @@ from ..config import get_settings
 from ..market_data.index_sampler import get_sampled_points
 from ..market_data.jumbo_repository import load_jumbo_data
 from ..market_data.repository import get_today_candidates
-from ..trading.mit import cancel_mit_order, create_mit_order, list_mit_orders
+from ..trading.mit import cancel_mit_order, clear_stale_mit_orders, create_mit_order, list_mit_orders
 from ..trading.risk import audit_order, preview_order, set_kill_switch
 from ..trading.risk import is_kill_switch_enabled
 from ..trading.schemas import (
@@ -557,6 +557,7 @@ def cancel_order(request: CancelOrderRequest) -> OrderResult:
 
 @router.get("/mit-orders", response_model=list[MitOrderRecord])
 def mit_orders() -> list[MitOrderRecord]:
+    clear_stale_mit_orders()  # 換日清掉非今日的 MIT
     records = list_mit_orders()
     # 已觸發(sent)的 MIT：以 order_no 回查當日委託回報的成交量，讓前端可顯示 已成交/部份成交/未成交。
     if any(r.status == "sent" and r.order_no for r in records):

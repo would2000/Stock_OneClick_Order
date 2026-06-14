@@ -948,6 +948,14 @@ class YuantaClient:
                 # 元大委託回報以 CancelFlag 標示取消（值格式因環境而異，採保守判斷）。
                 cancel_flag = str(getattr(item, "CancelFlag", "") or "").strip().upper()
                 cancelled = cancel_flag not in ("", "0", "N", "FALSE", "NULL")
+                accept_time = " ".join(
+                    part
+                    for part in (
+                        str(getattr(item, "AcceptDate", "") or "").strip(),
+                        str(getattr(item, "AcceptTime", "") or "").strip(),
+                    )
+                    if part
+                )
                 rows.append(
                     WorkingOrder(
                         order_no=order_no,
@@ -962,6 +970,7 @@ class YuantaClient:
                         ok_qty=int(item.OkQty),
                         status=str(getattr(item, "OrderStatus", "")).strip(),
                         cancelled=cancelled,
+                        accept_time=accept_time,
                     )
                 )
             except Exception:

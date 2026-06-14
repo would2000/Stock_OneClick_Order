@@ -58,9 +58,22 @@ def list_mit_orders(limit: int = 100) -> list[MitOrderRecord]:
 
 
 def list_pending_mit_orders() -> list[MitOrderRecord]:
+    # 只取今日的等待中觸價單，換日後昨日未觸發者不再觸發。
+    today = _now()[:10]
     with connect() as conn:
-        rows = conn.execute("SELECT * FROM mit_orders WHERE status = 'pending' ORDER BY id").fetchall()
+        rows = conn.execute(
+            "SELECT * FROM mit_orders WHERE status = 'pending' AND substr(created_at, 1, 10) = ? ORDER BY id",
+            (today,),
+        ).fetchall()
     return [_record(row) for row in rows]
+
+
+def clear_stale_mit_orders() -> int:
+    """換日清空：刪除非今日的 MIT 觸價單（含昨日未觸發的）。回傳刪除筆數。"""
+    today = _now()[:10]
+    with connect() as conn:
+        cur = conn.execute("DELETE FROM mit_orders WHERE substr(created_at, 1, 10) <> ?", (today,))
+        return cur.rowcount
 
 
 def cancel_mit_order(order_id: int) -> MitOrderRecord | None:
