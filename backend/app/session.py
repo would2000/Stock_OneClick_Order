@@ -79,22 +79,6 @@ def get_login_state() -> LoginState:
     return _state
 
 
-# 登入畫面各欄位 → Settings 屬性（依券商）。憑證路徑不在記住範圍（沿用 .env）。
-_REMEMBER_MAP: dict[str, dict[str, str]] = {
-    "yuanta": {
-        "account": "yuanta_account",
-        "password": "yuanta_password",
-        "cert_password": "yuanta_cert_password",
-    },
-    "sinopac": {
-        "api_key": "shioaji_api_key",
-        "secret_key": "shioaji_secret_key",
-        "person_id": "shioaji_person_id",
-        "cert_password": "shioaji_ca_password",
-    },
-}
-
-
 def _credentials_path():
     return get_settings().data_dir / "credentials.json"
 
@@ -124,33 +108,6 @@ def _save_credentials(data: dict[str, str]) -> None:
 def remembered_fields() -> list[str]:
     """目前已記住的 Settings 屬性名（不含值），給登入畫面預先勾選。"""
     return sorted(_load_credentials().keys())
-
-
-def _apply_credentials(broker: str, req: LoginRequest, settings) -> None:
-    """套用登入欄位：表單值 > 已記住值 > .env；並依各欄 remember 旗標更新受限儲存。"""
-    stored = _load_credentials()
-    remember = req.remember or {}
-    payload_values = {
-        "account": req.account,
-        "password": req.password,
-        "cert_password": req.cert_password,
-        "api_key": req.api_key,
-        "secret_key": req.secret_key,
-        "person_id": req.person_id,
-    }
-    for field, attr in _REMEMBER_MAP[broker].items():
-        value = (payload_values.get(field) or "").strip()
-        want = bool(remember.get(field))
-        if value:
-            setattr(settings, attr, value)
-        elif stored.get(attr):
-            setattr(settings, attr, stored[attr])  # 留白沿用已記住值
-        effective = value or stored.get(attr) or ""
-        if want and effective:
-            stored[attr] = effective
-        elif not want:
-            stored.pop(attr, None)  # 取消勾選＝忘記
-    _save_credentials(stored)
 
 
 def _apply_fugle_key(req: LoginRequest, settings) -> None:
@@ -222,7 +179,7 @@ def login(req: LoginRequest) -> LoginState:
         set_active_broker("sim")
         status = get_active_client().connect()
     elif req.environment == "yuanta":
-        _apply_credentials("yuanta", req, settings)
+        # 帳號/密碼/憑證密碼一律由 .env 取得（settings 已載入），不再經前端記住/落盤。
         if cert_path:
             settings.yuanta_cert_path = cert_path
         settings.yuanta_env = "PROD"
@@ -230,7 +187,7 @@ def login(req: LoginRequest) -> LoginState:
         set_active_broker("yuanta")
         status = get_active_client().connect()
     elif req.environment == "sinopac":
-        _apply_credentials("sinopac", req, settings)
+        # 帳號/Secret/憑證密碼一律由 .env 取得，不再經前端記住/落盤。
         if cert_path:
             settings.shioaji_ca_path = cert_path
         settings.shioaji_simulation = False

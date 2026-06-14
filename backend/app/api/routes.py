@@ -200,22 +200,16 @@ def auth_state() -> LoginState:
 
 @router.get("/auth/remembered", dependencies=[Depends(require_api_key)])
 def auth_remembered() -> dict[str, Any]:
-    # 只回傳「已記住的欄位名」（Settings 屬性，不含值）與「留白時會沿用的憑證檔名」。
-    from pathlib import Path  # noqa: PLC0415
-
+    # 只回傳「已記住的欄位名」（不含值）與「是否已設定憑證」布林。
+    # 不回傳真實憑證檔名——元大憑證檔名內含帳號等個資，不應顯示於前端。
     from ..session import remembered_fields  # noqa: PLC0415
 
     settings = get_settings()
-
-    def _name(path: str) -> str:
-        path = (path or "").strip()
-        return Path(path).name if path else ""
-
     return {
         "fields": remembered_fields(),
         "certs": {
-            "yuanta": _name(settings.yuanta_cert_path),
-            "sinopac": _name(settings.shioaji_ca_path),
+            "yuanta": bool((settings.yuanta_cert_path or "").strip()),
+            "sinopac": bool((settings.shioaji_ca_path or "").strip()),
         },
     }
 

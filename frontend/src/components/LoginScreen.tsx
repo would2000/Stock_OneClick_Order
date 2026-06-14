@@ -18,17 +18,6 @@ const SINOPAC_APIKEY_URL = "https://www.sinotrade.com.tw/newweb/Main/quote/api/"
 // 富果 Fugle MarketData API Key 申請（模擬環境用真實行情）
 const FUGLE_APIKEY_URL = "https://developer.fugle.tw/";
 
-// 登入欄位 → 後端 Settings 屬性（用來對應「已記住」狀態，預先勾選）。
-const REMEMBER_ATTR: Record<string, Record<string, string>> = {
-  yuanta: { account: "yuanta_account", password: "yuanta_password", cert_password: "yuanta_cert_password" },
-  sinopac: {
-    api_key: "shioaji_api_key",
-    secret_key: "shioaji_secret_key",
-    person_id: "shioaji_person_id",
-    cert_password: "shioaji_ca_password"
-  }
-};
-
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -151,10 +140,9 @@ export function LoginScreen({ onLoggedIn }: LoginScreenProps) {
   const [error, setError] = useState("");
   const [ack, setAck] = useState(false);
   const [rememberedKeys, setRememberedKeys] = useState<string[]>([]);
-  const [remember, setRemember] = useState<Record<string, boolean>>({});
-  const [certDefaults, setCertDefaults] = useState<{ yuanta: string; sinopac: string }>({ yuanta: "", sinopac: "" });
+  const [certDefaults, setCertDefaults] = useState<{ yuanta: boolean; sinopac: boolean }>({ yuanta: false, sinopac: false });
 
-  // 載入目前已記住的欄位（只取欄位名，不取值）與 .env 設定的憑證檔名。
+  // 載入已記住的欄位（目前只有富果金鑰）與 .env 設定的憑證檔名。
   useEffect(() => {
     getRemembered()
       .then((result) => {
@@ -163,16 +151,6 @@ export function LoginScreen({ onLoggedIn }: LoginScreenProps) {
       })
       .catch(() => setRememberedKeys([]));
   }, []);
-
-  // 切換環境或拿到已記住清單時，依對應關係預先勾選。
-  useEffect(() => {
-    const attrMap = REMEMBER_ATTR[env] ?? {};
-    const next: Record<string, boolean> = {};
-    for (const [field, attr] of Object.entries(attrMap)) {
-      next[field] = rememberedKeys.includes(attr);
-    }
-    setRemember(next);
-  }, [env, rememberedKeys]);
 
   function pickEnv(next: LoginEnvironment) {
     setEnv(next);
@@ -185,16 +163,12 @@ export function LoginScreen({ onLoggedIn }: LoginScreenProps) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  function setRememberField(field: string, value: boolean) {
-    setRemember((current) => ({ ...current, [field]: value }));
-  }
-
   async function submit() {
     if (busy) return;
     setBusy(true);
     setError("");
     try {
-      const state = await login({ ...form, environment: env, remember });
+      const state = await login({ ...form, environment: env });
       onLoggedIn(state);
     } catch (err) {
       setError(err instanceof Error ? err.message : "登入失敗。");
@@ -257,33 +231,18 @@ export function LoginScreen({ onLoggedIn }: LoginScreenProps) {
 
             {env === "yuanta" ? (
               <>
-                <MaskField label="帳號" value={form.account ?? ""} placeholder="S＋XXXX＋XXXXXXX（留白沿用設定）" onChange={(v) => setField("account", v)} rememberKey="account" remembered={remember.account} onRemember={(v) => setRememberField("account", v)} />
-                <MaskField label="密碼" value={form.password ?? ""} placeholder="留白沿用設定" defaultMasked onChange={(v) => setField("password", v)} rememberKey="password" remembered={remember.password} onRemember={(v) => setRememberField("password", v)} />
-                <CertField label="憑證（.pfx）" onPath={(p) => setField("cert_path", p)} currentName={certDefaults.yuanta} />
-                <MaskField label="憑證密碼" value={form.cert_password ?? ""} placeholder="留白沿用設定" defaultMasked onChange={(v) => setField("cert_password", v)} rememberKey="cert_password" remembered={remember.cert_password} onRemember={(v) => setRememberField("cert_password", v)} />
+                <p className="loginNote">帳號、密碼、憑證密碼由後端 .env 設定（YUANTA_ACCOUNT / PASSWORD / CERT_PASSWORD）。此處僅選擇憑證檔，留白沿用 .env 設定的憑證。</p>
+                <CertField label="憑證（.pfx）" onPath={(p) => setField("cert_path", p)} currentName={certDefaults.yuanta ? "已由 .env 設定的憑證" : ""} />
               </>
             ) : null}
 
             {env === "sinopac" ? (
               <>
-                <MaskField
-                  label="API Key"
-                  value={form.api_key ?? ""}
-                  placeholder="留白沿用設定"
-                  labelRight={
-                    <a href={SINOPAC_APIKEY_URL} target="_blank" rel="noreferrer" className="loginExtLink">
-                      申請 API Key <ExternalLink size={12} />
-                    </a>
-                  }
-                  onChange={(v) => setField("api_key", v)}
-                  rememberKey="api_key"
-                  remembered={remember.api_key}
-                  onRemember={(v) => setRememberField("api_key", v)}
-                />
-                <MaskField label="Secret Key" value={form.secret_key ?? ""} placeholder="留白沿用設定" defaultMasked onChange={(v) => setField("secret_key", v)} rememberKey="secret_key" remembered={remember.secret_key} onRemember={(v) => setRememberField("secret_key", v)} />
-                <MaskField label="身分證字號" value={form.person_id ?? ""} placeholder="留白沿用設定" defaultMasked onChange={(v) => setField("person_id", v)} rememberKey="person_id" remembered={remember.person_id} onRemember={(v) => setRememberField("person_id", v)} />
-                <CertField label="CA 憑證（.pfx）" onPath={(p) => setField("cert_path", p)} currentName={certDefaults.sinopac} />
-                <MaskField label="CA 憑證密碼" value={form.cert_password ?? ""} placeholder="留白沿用設定" defaultMasked onChange={(v) => setField("cert_password", v)} rememberKey="cert_password" remembered={remember.cert_password} onRemember={(v) => setRememberField("cert_password", v)} />
+                <p className="loginNote">
+                  API Key、Secret Key、身分證、憑證密碼由後端 .env 設定（SHIOAJI_*）。此處僅選擇 CA 憑證，留白沿用 .env 設定。
+                  <a href={SINOPAC_APIKEY_URL} target="_blank" rel="noreferrer" className="loginExtLink"> 申請 API Key <ExternalLink size={12} /></a>
+                </p>
+                <CertField label="CA 憑證（.pfx）" onPath={(p) => setField("cert_path", p)} currentName={certDefaults.sinopac ? "已由 .env 設定的憑證" : ""} />
               </>
             ) : null}
           </div>
@@ -292,7 +251,7 @@ export function LoginScreen({ onLoggedIn }: LoginScreenProps) {
           {isLive ? (
             <label className="loginAck">
               <input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />
-              <span>我了解這是<b>正式實單</b>環境，將以填入或設定檔（.env）既有的帳號連線、可下真實委託。</span>
+              <span>我了解這是<b>正式實單</b>環境，將以 .env 設定的帳號連線、可下真實委託。</span>
             </label>
           ) : null}
           {error ? <p className="loginError">{error}</p> : null}

@@ -77,7 +77,7 @@ export function getAuthState() {
 }
 
 export function getRemembered() {
-  return request<{ fields: string[]; certs: { yuanta: string; sinopac: string } }>("/api/auth/remembered");
+  return request<{ fields: string[]; certs: { yuanta: boolean; sinopac: boolean } }>("/api/auth/remembered");
 }
 
 export function login(payload: LoginPayload) {
