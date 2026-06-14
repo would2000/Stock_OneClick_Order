@@ -106,14 +106,14 @@ def _format_yuanta_stamp(date_obj: Any, time_obj: Any) -> str:
     if plain_date or plain_time:
         return f"{plain_date or ''} {plain_time or ''}".strip()
 
-    # 候選名涵蓋元大兩種命名慣例：直觀名（Year/Hour…）與 byte 前綴名
-    # （bytHour/bytMin/bytSec，已由 _tick_time_text 的 TimeStamp 結構證實存在）。
-    year = _read_int_attr(date_obj, ("Year", "yyyy", "sYear", "bytYear"))
-    month = _read_int_attr(date_obj, ("Month", "mm", "bytMonth"))
-    day = _read_int_attr(date_obj, ("Day", "dd", "bytDay"))
-    hour = _read_int_attr(time_obj, ("Hour", "hh", "bytHour"))
-    minute = _read_int_attr(time_obj, ("Minute", "min", "bytMin", "bytMinute"))
-    second = _read_int_attr(time_obj, ("Second", "sec", "ss", "bytSec", "bytSecond"))
+    # 真實欄位名（經實機 dir() 確認）：TYuantaDate=ushtYear/bytMon/bytDay、
+    # TYuantaTime=bytHour/bytMin/bytSec；其餘為其他環境的備援候選。
+    year = _read_int_attr(date_obj, ("ushtYear", "Year", "yyyy", "sYear", "bytYear"))
+    month = _read_int_attr(date_obj, ("bytMon", "Month", "mm", "bytMonth"))
+    day = _read_int_attr(date_obj, ("bytDay", "Day", "dd"))
+    hour = _read_int_attr(time_obj, ("bytHour", "Hour", "hh"))
+    minute = _read_int_attr(time_obj, ("bytMin", "Minute", "min", "bytMinute"))
+    second = _read_int_attr(time_obj, ("bytSec", "Second", "sec", "ss", "bytSecond"))
 
     if year is not None and 0 < year < 1911:  # 萬一回的是民國年，補成西元年。
         year += 1911
@@ -1013,9 +1013,11 @@ class YuantaClient:
                 if not order_no:
                     continue
                 symbol = str(getattr(item, "StkCode", "") or getattr(item, "CompanyNo", "")).strip()
-                # 元大委託回報以 CancelFlag 標示取消（值格式因環境而異，採保守判斷）。
-                cancel_flag = str(getattr(item, "CancelFlag", "") or "").strip().upper()
-                cancelled = cancel_flag not in ("", "0", "N", "FALSE", "NULL")
+                # 元大實測：CancelFlag 恆為 'N'，不能用來判斷取消。真正的取消/刪單訊號是
+                # CancelQty>0（被取消數量），且 OrderStatus=30 代表委託已取消/失效且無成交。
+                order_status = str(getattr(item, "OrderStatus", "")).strip()
+                cancel_qty = int(getattr(item, "CancelQty", 0) or 0)
+                cancelled = cancel_qty > 0 or order_status == "30"
                 accept_time = _format_yuanta_stamp(
                     getattr(item, "AcceptDate", None),
                     getattr(item, "AcceptTime", None),
@@ -1032,7 +1034,7 @@ class YuantaClient:
                         before_qty=int(item.BeforeQty),
                         after_qty=int(item.AfterQty),
                         ok_qty=int(item.OkQty),
-                        status=str(getattr(item, "OrderStatus", "")).strip(),
+                        status=order_status,
                         cancelled=cancelled,
                         accept_time=accept_time,
                     )

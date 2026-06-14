@@ -545,9 +545,14 @@ class ShioajiClient:
                 status = str(trade.status.status).replace("Status.", "").removeprefix("Order")
                 qty = int(trade.order.quantity)
                 filled = int(getattr(trade.status, "deal_quantity", 0) or 0)
+                cancel_qty = int(getattr(trade.status, "cancel_quantity", 0) or 0)
                 # Shioaji order lifecycle: PendingSubmit → PreSubmitted →
-                # Submitted → PartFilled/Filled | Cancelled | Failed.
+                # Submitted → PartFilled/Filled | Cancelled | Failed | Inactive.
                 working = status in ("PendingSubmit", "PreSubmitted", "Submitted", "PartFilled")
+                cancelled = status in ("Cancelled", "Failed", "Inactive") or cancel_qty > 0
+                # 委託成立時間（Shioaji 提供 order_datetime，型別為 datetime）。
+                order_dt = getattr(trade.status, "order_datetime", None)
+                accept_time = str(order_dt)[:19] if order_dt else ""
                 rows.append(
                     WorkingOrder(
                         order_no=str(trade.order.id),
@@ -559,8 +564,12 @@ class ShioajiClient:
                         order_type="0",
                         before_qty=qty * 1000,
                         after_qty=qty * 1000,
-                        ok_qty=(filled if working else qty) * 1000,
+                        # 用實際成交量；只有 Filled 才強制等於委託量（避免 deal_quantity 尚未更新）。
+                        # 取消/失敗單成交量維持實際值（通常 0），不再誤算成全量而顯示「已成交」。
+                        ok_qty=(qty if status == "Filled" else filled) * 1000,
                         status="20" if working else status,
+                        cancelled=cancelled,
+                        accept_time=accept_time,
                     )
                 )
             except Exception:
