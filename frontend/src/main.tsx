@@ -55,7 +55,8 @@ import { JumboChartPage } from "./pages/JumboChartPage";
 
 type ThemeName = "light" | "dark" | "warm" | "cool";
 type MainTab = "orders" | "trades" | "mit" | "inventory";
-type OrderFilter = "all" | "unfilled" | "filled";
+// all=全部委託、none=未成交(含取消)、partial=未完全成交、filled=已成交
+type OrderFilter = "all" | "none" | "partial" | "filled";
 type PortfolioTab = "live" | "watchlist";
 type WatchItem = { symbol: string; name: string; cost: number; lots: number; shares: number };
 type IndexIntradayModel = { points: IndexIntradayPoint[]; quote: IndexIntradayQuote };
@@ -480,8 +481,8 @@ function App({ theme, setTheme, onLogout }: AppProps) {
   const [confirmBeforeSend, setConfirmBeforeSend] = useState(true);
   const [mitOrders, setMitOrders] = useState<MitOrderRecord[]>([]);
   const [workingOrders, setWorkingOrders] = useState<WorkingOrder[]>([]);
-  // 委託查詢表的篩選與資料（與 workingOrders 分開，避免影響閃電面板/統計）。
-  const [orderFilter, setOrderFilter] = useState<OrderFilter>("unfilled");
+  // 委託查詢表的篩選與資料（抓「全部委託」後在前端分 4 類；與 workingOrders 分開，避免影響閃電面板/統計）。
+  const [orderFilter, setOrderFilter] = useState<OrderFilter>("all");
   const [orderReport, setOrderReport] = useState<WorkingOrder[]>([]);
   const [trades, setTrades] = useState<TradeRecord2[]>([]);
   const [invSelected, setInvSelected] = useState<Set<string>>(new Set());
@@ -549,10 +550,12 @@ function App({ theme, setTheme, onLogout }: AppProps) {
 
   const [ticks, setTicks] = useState<TickRecord[]>([]);
   const [fiveTick, setFiveTick] = useState<FiveTickBook | null>(null);
+  const [ladderLoading, setLadderLoading] = useState(false);
 
   const handleFiveTick = useCallback((symbol: string, book: FiveTickBook) => {
     if (symbol === selectedSymbolRef.current) {
       setFiveTick(book);
+      setLadderLoading(false); // 五檔到了就關閉載入中
     }
   }, []);
 
@@ -602,6 +605,11 @@ function App({ theme, setTheme, onLogout }: AppProps) {
     let cancelled = false;
     setTicks([]);
     setFiveTick(null);
+    setLadderLoading(true); // 切換商品 → 先顯示五檔載入中，避免誤判舊資料
+    // 保險：若該檔遲遲沒有五檔推播（盤後／冷門股），最多顯示數秒後自動關閉。
+    const loadingTimer = window.setTimeout(() => {
+      if (!cancelled) setLadderLoading(false);
+    }, 3000);
     void loadDailyTicks(selectedSymbol).then((stored) => {
       if (!cancelled && stored.length && selectedSymbolRef.current === selectedSymbol) {
         setTicks((current) => (current.length ? current : stored));
@@ -609,6 +617,7 @@ function App({ theme, setTheme, onLogout }: AppProps) {
     });
     return () => {
       cancelled = true;
+      window.clearTimeout(loadingTimer);
     };
   }, [selectedSymbol]);
 
@@ -616,22 +625,45 @@ function App({ theme, setTheme, onLogout }: AppProps) {
     return new Map(quotes.map((quote) => [quote.symbol, quote]));
   }, [quotes]);
 
-  const selectedName =
-    quoteBySymbol.get(selectedSymbol)?.name ||
-    watchlist.find((item) => item.symbol === selectedSymbol)?.name ||
-    positions.find((item) => item.symbol === selectedSymbol)?.name ||
-    selectedSymbol;
+  const [nameCache, setNameCache] = useState<Record<string, string>>({});
+  // 把各來源（報價/候選/搜尋/自選/庫存）學到的股票名稱累積進快取，之後即使來源變動也持久。
+  useEffect(() => {
+    setNameCache((current) => {
+      const next = { ...current };
+      let changed = false;
+      const remember = (sym: string, nm?: string) => {
+        const name = (nm || "").trim();
+        if (sym && name && name !== sym && next[sym] !== name) {
+          next[sym] = name;
+          changed = true;
+        }
+      };
+      quotes.forEach((q) => remember(q.symbol, q.name));
+      candidates.forEach((c) => remember(c.symbol, c.name));
+      watchlist.forEach((w) => remember(w.symbol, w.name));
+      positions.forEach((p) => remember(p.symbol, p.name));
+      symbolHits.forEach((h) => remember(h.code, h.name));
+      return changed ? next : current;
+    });
+  }, [quotes, candidates, watchlist, positions, symbolHits]);
+
+  // 統一的 symbol→名稱 解析（含快取）。fugle 報價常缺 name，這裡彙整所有來源，
+  // 並由下方 effect 把學到的名稱存進快取持久化，避免圖表標題退回顯示成代號（如「2885 2885」）。
+  const nameFor = (symbol: string) =>
+    nameCache[symbol] ||
+    quoteBySymbol.get(symbol)?.name ||
+    symbolHits.find((hit) => hit.code === symbol)?.name ||
+    candidates.find((item) => item.symbol === symbol)?.name ||
+    watchlist.find((item) => item.symbol === symbol)?.name ||
+    positions.find((item) => item.symbol === symbol)?.name ||
+    "";
+
+  const selectedName = nameFor(selectedSymbol) || selectedSymbol;
   const selectedQuote = quoteBySymbol.get(selectedSymbol);
   const selectedWatchItem = watchlist.find((item) => item.symbol === selectedSymbol);
   const selectedPosition = positions.find((item) => item.symbol === selectedSymbol);
   // 閃電下單商品欄位的股票名稱（隨 order.symbol 代號變動）。
-  const orderName =
-    quoteBySymbol.get(order.symbol)?.name ||
-    symbolHits.find((hit) => hit.code === order.symbol)?.name ||
-    candidates.find((item) => item.symbol === order.symbol)?.name ||
-    watchlist.find((item) => item.symbol === order.symbol)?.name ||
-    positions.find((item) => item.symbol === order.symbol)?.name ||
-    "";
+  const orderName = nameFor(order.symbol);
   const selectedFallbackPrice =
     selectedQuote?.deal_price ||
     selectedPosition?.market_price ||
@@ -697,16 +729,15 @@ function App({ theme, setTheme, onLogout }: AppProps) {
     });
     return { buyOrder, buyMit, sellOrder, sellMit };
   }, [workingOrders, mitOrders, selectedSymbol]);
-  // 委託查詢表要顯示的資料：依下拉選單篩選（未完全成交沿用 workingOrders）。
+  // 委託查詢表要顯示的資料：抓全部委託後，依「成交量 vs 委託量 + 取消旗標」分 4 類。
   const displayedOrders = useMemo(() => {
-    if (orderFilter === "filled") {
-      return orderReport.filter((o) => o.ok_qty > 0 && o.after_qty - o.ok_qty === 0);
-    }
-    if (orderFilter === "all") {
-      return orderReport;
-    }
-    return workingOrders;
-  }, [orderFilter, orderReport, workingOrders]);
+    return orderReport.filter((o) => {
+      if (orderFilter === "none") return !!o.cancelled || o.ok_qty === 0; // 未成交（含取消單）
+      if (orderFilter === "partial") return !o.cancelled && o.ok_qty > 0 && o.ok_qty < o.after_qty;
+      if (orderFilter === "filled") return !o.cancelled && o.ok_qty > 0 && o.ok_qty >= o.after_qty;
+      return true; // all
+    });
+  }, [orderFilter, orderReport]);
   const latestTick = ticks[ticks.length - 1];
   const tseIndexDisplay = useMemo(
     () => mergeIndexLiveQuote(tseIndex, quoteBySymbol.get("IX0001")),
@@ -869,9 +900,9 @@ function App({ theme, setTheme, onLogout }: AppProps) {
     }
   }
 
-  // 委託查詢表用：未完全成交時直接沿用 workingOrders；其餘抓「全部委託」再前端篩選。
-  async function refreshOrderReport(filter: OrderFilter = orderFilter) {
-    if (filter === "unfilled" || !yuantaStatus?.connected) {
+  // 委託查詢表用：一律抓「全部委託」，前端再依成交量分 4 類顯示。
+  async function refreshOrderReport() {
+    if (!yuantaStatus?.connected) {
       return;
     }
     try {
@@ -1423,6 +1454,9 @@ function App({ theme, setTheme, onLogout }: AppProps) {
       if (mainTab === "trades") {
         void refreshTrades();
       }
+      if (mainTab === "orders") {
+        void refreshOrderReport();
+      }
     };
     tick(); // 連線/登入後立即載入一次（含庫存、風控狀態），之後每 5 秒自動更新。
     const timer = window.setInterval(tick, 5000);
@@ -1463,6 +1497,13 @@ function App({ theme, setTheme, onLogout }: AppProps) {
       refreshIndexIntraday(true);
     }
   }, [yuantaStatus?.connected, selectedSymbol]);
+
+  // 切換到「委託查詢」分頁時立即載入全部委託，不必等下一次輪詢。
+  useEffect(() => {
+    if (mainTab === "orders") {
+      void refreshOrderReport();
+    }
+  }, [mainTab]);
 
   return (
     <main className={`appShell theme-${theme}`}>
@@ -1529,14 +1570,11 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                 <select><option>全部交易</option></select>
                 <select
                   value={orderFilter}
-                  onChange={(event) => {
-                    const next = event.target.value as OrderFilter;
-                    setOrderFilter(next);
-                    void refreshOrderReport(next);
-                  }}
+                  onChange={(event) => setOrderFilter(event.target.value as OrderFilter)}
                 >
                   <option value="all">全部委託</option>
-                  <option value="unfilled">未完全成交委託</option>
+                  <option value="none">未成交委託</option>
+                  <option value="partial">未完全成交委託</option>
                   <option value="filled">已成交委託</option>
                 </select>
                 <button
@@ -1586,13 +1624,13 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                           <td>{numberText(item.ok_qty / 1000, 0)}</td>
                           <td>{numberText((item.after_qty - item.ok_qty) / 1000, 0)}</td>
                           <td>
-                            {item.ok_qty > 0 && item.after_qty - item.ok_qty === 0
-                              ? "已成交"
-                              : item.ok_qty > 0
-                                ? "部分成交"
-                                : item.status === "20"
-                                  ? "委託中"
-                                  : item.status}
+                            {item.cancelled
+                              ? "取消"
+                              : item.ok_qty > 0 && item.ok_qty >= item.after_qty
+                                ? "已成交"
+                                : item.ok_qty > 0
+                                  ? "部分成交"
+                                  : "未成交"}
                           </td>
                         </tr>
                       ))}
@@ -1815,7 +1853,6 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                       ))}
                     </div>
                   ) : null}
-                  {orderName ? <span className="symbolName">{orderName}</span> : null}
                 </label>
                 <label>張數<input
                   type="number"
@@ -1850,6 +1887,7 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                 const trendClass = change === null || change === 0 ? "" : change > 0 ? "down" : "up";
                 return (
                   <div className="flashQuoteStrip">
+                    <b className="flashSym" title={orderName || selectedName}>{orderName || selectedName}</b>
                     <span>成交價</span>
                     <b className={trendClass}>{numberText(deal)}</b>
                     <span>漲跌</span>
@@ -1865,6 +1903,12 @@ function App({ theme, setTheme, onLogout }: AppProps) {
               })()}
               <div className="lightningBody">
                 <div className="priceLadder">
+                  {ladderLoading && yuantaStatus?.connected ? (
+                    <div className="ladderLoading">
+                      <Loader2 size={16} className="spin" />
+                      <span>五檔報價載入中…</span>
+                    </div>
+                  ) : null}
                   <div className="ladderHeader">
                     <span>刪單</span><span>MIT</span><span>買進</span><span>委買</span><span>價格</span><span>委賣</span><span>賣出</span><span>MIT</span><span>刪單</span>
                   </div>

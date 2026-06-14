@@ -464,6 +464,25 @@ label {
   min-height: 0;
 }
 
+/* 五檔載入中覆蓋層：切換商品時蓋住可能過時的委買/委賣，避免誤判。 */
+.priceLadder {
+  position: relative;
+}
+
+.ladderLoading {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .ladderHeader,
 .ladderRow {
   display: grid;
@@ -723,9 +742,21 @@ label {
   display: grid;
   font-size: 11px;
   gap: 4px;
-  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: auto auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
   min-height: 26px;
   padding: 3px 6px;
+}
+
+/* 商品名稱整合進報價列最前方（取代原本商品欄下方的獨立名稱）。 */
+.flashQuoteStrip .flashSym {
+  color: var(--accent);
+  font-weight: 700;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 4px;
+  border-right: 1px solid var(--border);
 }
 
 .flashQuoteStrip span {

@@ -229,7 +229,10 @@ class MockBrokerClient:
 
     def cancel_stock_order(self, order: OrderRequest) -> OrderResult:
         with self._lock:
-            self._orders.pop(order.order_no, None)
+            row = self._orders.get(order.order_no)
+            if row is not None:
+                # 保留紀錄並標記為取消，讓「全部委託」可顯示為取消單（取消單歸類於未成交）。
+                row["cancelled"] = True
             self._save()
         return OrderResult(accepted=True, mode="sim", message="模擬刪單成功", order_no=order.order_no)
 

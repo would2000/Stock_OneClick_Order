@@ -102,6 +102,7 @@ class WorkingOrder(BaseModel):
     after_qty: int = 0
     ok_qty: int = 0
     status: str = ""
+    cancelled: bool = False
 
 
 class TradeRecord(BaseModel):

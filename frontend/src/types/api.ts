@@ -140,6 +140,7 @@ export type WorkingOrder = {
   after_qty: number;
   ok_qty: number;
   status: string;
+  cancelled?: boolean;
 };
 
 export type TradeRecord2 = {

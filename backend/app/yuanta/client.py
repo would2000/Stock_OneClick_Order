@@ -945,6 +945,9 @@ class YuantaClient:
                 if not order_no:
                     continue
                 symbol = str(getattr(item, "StkCode", "") or getattr(item, "CompanyNo", "")).strip()
+                # 元大委託回報以 CancelFlag 標示取消（值格式因環境而異，採保守判斷）。
+                cancel_flag = str(getattr(item, "CancelFlag", "") or "").strip().upper()
+                cancelled = cancel_flag not in ("", "0", "N", "FALSE", "NULL")
                 rows.append(
                     WorkingOrder(
                         order_no=order_no,
@@ -958,6 +961,7 @@ class YuantaClient:
                         after_qty=int(item.AfterQty),
                         ok_qty=int(item.OkQty),
                         status=str(getattr(item, "OrderStatus", "")).strip(),
+                        cancelled=cancelled,
                     )
                 )
             except Exception:
