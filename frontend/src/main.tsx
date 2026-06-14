@@ -498,7 +498,6 @@ function App({ theme, setTheme, onLogout }: AppProps) {
   const [mitSelected, setMitSelected] = useState<Set<number>>(new Set()); // MIT 勾選（key=id）
   const [invLots, setInvLots] = useState<Record<string, number>>({});
   const [invConfirmOpen, setInvConfirmOpen] = useState(false);
-  const [invPriceMode, setInvPriceMode] = useState<"current" | "up" | "down">("current");
   const [symbolHits, setSymbolHits] = useState<SymbolHit[]>([]);
   const [symbolSearchOpen, setSymbolSearchOpen] = useState(false);
   const symbolSearchTimerRef = useRef(0);
@@ -961,22 +960,23 @@ function App({ theme, setTheme, onLogout }: AppProps) {
   }
 
   function invDefaultLots(position: Position) {
-    return Math.max(1, Math.floor(position.quantity / 1000));
+    // 用絕對值：空單庫存量為負，仍要算出可平倉的完整張數。
+    return Math.max(1, Math.floor(Math.abs(position.quantity) / 1000));
   }
 
   function invLotsFor(position: Position) {
     return invLots[position.symbol] ?? invDefaultLots(position);
   }
 
-  function invPriceFor(symbol: string): number {
-    const quote = quoteBySymbol.get(symbol);
-    if (invPriceMode === "up") {
-      return quote?.up_limit && quote.up_limit > 0 ? quote.up_limit : 0;
-    }
-    if (invPriceMode === "down") {
-      return quote?.down_limit && quote.down_limit > 0 ? quote.down_limit : 0;
-    }
-    return quote?.deal_price && quote.deal_price > 0 ? quote.deal_price : 0;
+  // 全部反向平倉：多單(quantity>=0)→賣出@跌停價；空單(quantity<0)→買進@漲停價（保證成交出清）。
+  function invCloseOrder(position: Position): { side: "B" | "S"; price: number; isLong: boolean; limitKind: "up" | "down" } {
+    const quote = quoteBySymbol.get(position.symbol);
+    const isLong = position.quantity >= 0;
+    const side: "B" | "S" = isLong ? "S" : "B";
+    const limitKind: "up" | "down" = isLong ? "down" : "up";
+    const limit = isLong ? quote?.down_limit : quote?.up_limit;
+    const price = limit && limit > 0 ? limit : 0;
+    return { side, price, isLong, limitKind };
   }
 
   async function sendInventoryOrders() {
@@ -994,11 +994,11 @@ function App({ theme, setTheme, onLogout }: AppProps) {
     let sent = 0;
     try {
       for (const position of targets) {
-        const price = invPriceFor(position.symbol);
+        const { side, price } = invCloseOrder(position);
         const request: OrderRequest = {
           ...defaultOrder,
           symbol: position.symbol,
-          side: "S",
+          side,
           price,
           price_flag: price > 0 ? "" : "M",
           quantity: invLotsFor(position),
@@ -1882,10 +1882,7 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                     <button
                       className="primary"
                       disabled={busy || invSelected.size === 0}
-                      onClick={() => {
-                        setInvPriceMode("current");
-                        setInvConfirmOpen(true);
-                      }}
+                      onClick={() => setInvConfirmOpen(true)}
                     >
                       <Send size={14} />全部送出（{invSelected.size}）
                     </button>
@@ -2033,19 +2030,34 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                 const deal = selectedQuote?.deal_price ?? null;
                 const prev = selectedQuote?.prev_close ?? null;
                 const change = deal !== null && prev !== null && prev > 0 ? deal - prev : null;
+                const changePercent = change !== null && prev !== null && prev > 0 ? (change / prev) * 100 : null;
                 const trendClass = change === null || change === 0 ? "" : change > 0 ? "down" : "up";
+                const openPrice = selectedQuote?.open_price ?? null;
+                const openClass = openPrice !== null && prev !== null && prev > 0 ? (openPrice > prev ? "down" : openPrice < prev ? "up" : "") : "";
+                const totalVol = selectedQuote?.total_volume ?? null;
+                // 預估全日量：累計量 ÷ 已過盤時間比例（09:00–13:30＝270 分鐘線性外推；盤前/收盤後不外推）。
+                const estVol = (() => {
+                  if (totalVol === null || totalVol <= 0) return null;
+                  const now = new Date();
+                  const elapsed = now.getHours() * 60 + now.getMinutes() - 540;
+                  if (elapsed <= 0 || elapsed >= 270) return totalVol;
+                  return Math.round(totalVol / (elapsed / 270));
+                })();
                 return (
                   <div className="flashQuoteStrip">
                     <b className="flashSym" title={orderName || selectedName}>{orderName || selectedName}</b>
                     <span className="qPair"><span>成交價</span><b className={trendClass}>{numberText(deal)}</b></span>
+                    <span className="qPair"><span>開盤</span><b className={openClass}>{numberText(openPrice)}</b></span>
                     <span className="qPair">
                       <span>漲跌</span>
                       <b className={trendClass}>
                         {change === null ? "-" : `${change > 0 ? "▲" : change < 0 ? "▼" : ""}${numberText(Math.abs(change))}`}
                       </b>
                     </span>
+                    <span className="qPair"><span>幅度</span><b className={trendClass}>{changePercent === null ? "-" : `${changePercent > 0 ? "▲" : changePercent < 0 ? "▼" : ""}${numberText(Math.abs(changePercent))}%`}</b></span>
                     <span className="qPair"><span>單量</span><b>{latestTick ? numberText(latestTick.volume, 0) : "-"}</b></span>
-                    <span className="qPair"><span>總量</span><b className="volText">{numberText(selectedQuote?.total_volume, 0)}</b></span>
+                    <span className="qPair"><span>總量</span><b className="volText">{selectedQuote?.total_volume ? `${numberText(selectedQuote.total_volume, 0)} 張` : "-"}</b></span>
+                    <span className="qPair" title="預估全日量：依目前累計量與已過盤時間線性外推，僅供參考"><span>預估</span><b className="volText">{estVol === null ? "-" : `${numberText(estVol, 0)} 張`}</b></span>
                   </div>
                 );
               })()}
@@ -2157,27 +2169,24 @@ function App({ theme, setTheme, onLogout }: AppProps) {
           <div className="confirmOverlay" onClick={() => setInvConfirmOpen(false)}>
             <div className="confirmDialog invConfirmDialog" onClick={(event) => event.stopPropagation()}>
               <div className="windowTitle">
-                <strong>庫存下單確認</strong>
-                <span>賣出 {invSelected.size} 檔（必經二次確認）</span>
-              </div>
-              <div className="segmented invPriceModes">
-                <button type="button" className={invPriceMode === "current" ? "selected" : ""} onClick={() => setInvPriceMode("current")}>現價</button>
-                <button type="button" className={invPriceMode === "up" ? "selected" : ""} onClick={() => setInvPriceMode("up")}>漲停</button>
-                <button type="button" className={invPriceMode === "down" ? "selected" : ""} onClick={() => setInvPriceMode("down")}>跌停</button>
+                <strong>全部反向平倉確認</strong>
+                <span>多單→賣出跌停、空單→買進漲停，共 {invSelected.size} 檔（送出即為真實委託，必經二次確認）</span>
               </div>
               <table className="denseTable">
-                <thead><tr><th>商品</th><th>張數</th><th>委託價</th><th>預估金額</th></tr></thead>
+                <thead><tr><th>商品</th><th>庫存</th><th>動作</th><th>委託價</th><th>張數</th><th>預估金額</th></tr></thead>
                 <tbody>
                   {positions.filter((item) => invSelected.has(item.symbol)).map((position) => {
-                    const price = invPriceFor(position.symbol);
+                    const { side, price, isLong, limitKind } = invCloseOrder(position);
                     const lots = invLotsFor(position);
                     return (
                       <tr key={position.symbol}>
                         <td>{position.name} {position.symbol}</td>
-                        <td>{lots}</td>
-                        <td className={invPriceMode === "up" ? "down" : invPriceMode === "down" ? "up" : ""}>
-                          {price > 0 ? numberText(price) : "市價"}
+                        <td className={isLong ? "down" : "up"}>{isLong ? "多" : "空"}</td>
+                        <td className={side === "B" ? "down" : "up"}>{side === "B" ? "買進" : "賣出"}</td>
+                        <td className={limitKind === "up" ? "down" : "up"}>
+                          {price > 0 ? `${limitKind === "up" ? "漲停" : "跌停"} ${numberText(price)}` : "市價"}
                         </td>
+                        <td>{lots}</td>
                         <td>{price > 0 ? numberText(price * lots * 1000, 0) : "-"}</td>
                       </tr>
                     );

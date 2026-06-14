@@ -309,7 +309,8 @@ function buildPriceSeries(
       coord: [times[lastIdx], avgVal],
       value: avgVal,
       itemStyle: { color: colors.muted },
-      label: { show: true, position: "right", color: colors.muted, fontSize: 11, fontWeight: 700, formatter: `均{c}` }
+      // 往內（left）標示，避免在圖最右緣往外溢出被裁切（與收盤 C: 同側、不同 y 不重疊）。
+      label: { show: true, position: "left", color: colors.muted, fontSize: 11, fontWeight: 700, formatter: `均{c}` }
     });
   }
 
