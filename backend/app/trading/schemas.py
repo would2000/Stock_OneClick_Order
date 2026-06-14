@@ -160,6 +160,8 @@ class MitOrderRecord(BaseModel):
     triggered_at: str | None = None
     order_no: str | None = None
     message: str = ""
+    filled_qty: int = 0  # 觸發後送出委託的成交股數（由清單 API 以 order_no 回查回填）
+    order_cancelled: bool = False  # 觸發送出的委託是否已被取消
 
 
 class LoginRequest(BaseModel):

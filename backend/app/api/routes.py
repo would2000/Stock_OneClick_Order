@@ -557,7 +557,19 @@ def cancel_order(request: CancelOrderRequest) -> OrderResult:
 
 @router.get("/mit-orders", response_model=list[MitOrderRecord])
 def mit_orders() -> list[MitOrderRecord]:
-    return list_mit_orders()
+    records = list_mit_orders()
+    # 已觸發(sent)的 MIT：以 order_no 回查當日委託回報的成交量，讓前端可顯示 已成交/部份成交/未成交。
+    if any(r.status == "sent" and r.order_no for r in records):
+        try:
+            by_no = {o.order_no: o for o in get_active_client().get_stock_orders() if o.order_no}
+        except Exception:  # noqa: BLE001  # 回查失敗不影響清單顯示
+            by_no = {}
+        for record in records:
+            order = by_no.get(record.order_no or "")
+            if order is not None:
+                record.filled_qty = order.ok_qty
+                record.order_cancelled = order.cancelled
+    return records
 
 
 @router.post("/mit-orders", response_model=MitOrderRecord, dependencies=[Depends(require_api_key)])

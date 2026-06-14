@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Crosshair, Link2Off, Loader2, Pencil, PlayCircle, Plus, RefreshCw, Save, Send, Trash2, X } from "lucide-react";
+import { CheckSquare, Crosshair, Link2Off, Loader2, Pencil, PlayCircle, Plus, RefreshCw, Save, Send, Square, Trash2, X } from "lucide-react";
 import {
   cancelMitOrder,
   connectYuanta,
@@ -15,7 +15,6 @@ import {
   getKline,
   getPositions,
   getQuotes,
-  getOrderTrades,
   getWorkingOrders,
   getYuantaStatus,
   cancelWorkingOrder,
@@ -40,7 +39,6 @@ import type {
   Position,
   Quote,
   TickRecord,
-  TradeRecord2,
   WorkingOrder,
   YuantaStatus
 } from "./types/api";
@@ -54,7 +52,7 @@ import { JumboChartDemo } from "./pages/JumboChartDemo";
 import { JumboChartPage } from "./pages/JumboChartPage";
 
 type ThemeName = "light" | "dark" | "warm" | "cool";
-type MainTab = "orders" | "trades" | "mit" | "inventory";
+type MainTab = "orders" | "mit" | "inventory";
 // all=全部委託、none=未成交(含取消)、partial=未完全成交、filled=已成交
 type OrderFilter = "all" | "none" | "partial" | "filled";
 type PortfolioTab = "live" | "watchlist";
@@ -69,6 +67,16 @@ const MIT_STATUS_TEXT: Record<MitOrderRecord["status"], string> = {
   failed: "觸發失敗",
   cancelled: "已取消"
 };
+
+// MIT 顯示狀態：已觸發(sent)依回查的成交量分 已成交/部份成交/未成交；其餘沿用觸發狀態。
+function mitStatusText(m: MitOrderRecord): string {
+  if (m.status !== "sent") return MIT_STATUS_TEXT[m.status] ?? m.status;
+  if (m.order_cancelled) return "已取消";
+  const filledLots = (m.filled_qty ?? 0) / 1000;
+  if (filledLots > 0 && filledLots >= m.quantity) return "已成交";
+  if (filledLots > 0) return "部份成交";
+  return "未成交";
+}
 type PriceLadderRow = {
   price: number;
   label: string;
@@ -441,7 +449,6 @@ type AppProps = {
 function App({ theme, setTheme, onLogout }: AppProps) {
   const [mainTab, setMainTab] = useState<MainTab>("orders");
   const ordersResize = useColResize();
-  const tradesResize = useColResize();
   const mitResize = useColResize();
   const [indexTab, setIndexTab] = useState<"TSE" | "OTC">("TSE");
   const [portfolioTab, setPortfolioTab] = useState<PortfolioTab>("live");
@@ -484,8 +491,9 @@ function App({ theme, setTheme, onLogout }: AppProps) {
   // 委託查詢表的篩選與資料（抓「全部委託」後在前端分 4 類；與 workingOrders 分開，避免影響閃電面板/統計）。
   const [orderFilter, setOrderFilter] = useState<OrderFilter>("all");
   const [orderReport, setOrderReport] = useState<WorkingOrder[]>([]);
-  const [trades, setTrades] = useState<TradeRecord2[]>([]);
   const [invSelected, setInvSelected] = useState<Set<string>>(new Set());
+  const [orderSelected, setOrderSelected] = useState<Set<string>>(new Set()); // 委託查詢勾選（key=order_no）
+  const [mitSelected, setMitSelected] = useState<Set<number>>(new Set()); // MIT 勾選（key=id）
   const [invLots, setInvLots] = useState<Record<string, number>>({});
   const [invConfirmOpen, setInvConfirmOpen] = useState(false);
   const [invPriceMode, setInvPriceMode] = useState<"current" | "up" | "down">("current");
@@ -738,6 +746,10 @@ function App({ theme, setTheme, onLogout }: AppProps) {
       return true; // all
     });
   }, [orderFilter, orderReport]);
+  // 可刪的委託（未取消且尚有未成交剩餘）／可取消的 MIT（等待中）——只有這些列才顯示勾選框與刪/取消鈕。
+  const isOrderCancellable = (o: WorkingOrder) => !o.cancelled && o.after_qty - o.ok_qty > 0;
+  const cancellableOrderNos = displayedOrders.filter(isOrderCancellable).map((o) => o.order_no);
+  const pendingMitIds = mitOrders.filter((m) => m.status === "pending").map((m) => m.id);
   const latestTick = ticks[ticks.length - 1];
   const tseIndexDisplay = useMemo(
     () => mergeIndexLiveQuote(tseIndex, quoteBySymbol.get("IX0001")),
@@ -912,17 +924,6 @@ function App({ theme, setTheme, onLogout }: AppProps) {
     }
   }
 
-  async function refreshTrades() {
-    if (!yuantaStatus?.connected) {
-      return;
-    }
-    try {
-      setTrades(await getOrderTrades());
-    } catch {
-      // Transient failures keep the last known list visible.
-    }
-  }
-
   function workingRemainingLots(item: WorkingOrder) {
     return Math.max(1, Math.round((item.after_qty - item.ok_qty) / 1000));
   }
@@ -1009,7 +1010,8 @@ function App({ theme, setTheme, onLogout }: AppProps) {
           : `庫存送單完成，共 ${sent} 筆。`
       );
       void refreshWorkingOrders();
-      void refreshTrades();
+      void refreshOrderReport();
+      void refreshPositions(true); // 部位有變動立刻更新
     } finally {
       setBusy(false);
       submitLockRef.current = false;
@@ -1085,6 +1087,77 @@ function App({ theme, setTheme, onLogout }: AppProps) {
       setMessage("MIT 觸價單已取消。");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "MIT 取消失敗。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // 委託查詢：批次刪除「已勾選且仍可刪」的委託（已成交／已取消無法刪）。
+  async function cancelSelectedOrders() {
+    const targets = displayedOrders.filter(
+      (o) => orderSelected.has(o.order_no) && !o.cancelled && o.after_qty - o.ok_qty > 0
+    );
+    if (!targets.length) {
+      setMessage("沒有可刪除的委託（已成交／已取消無法刪）。");
+      return;
+    }
+    if (!window.confirm(`確定刪除選取的 ${targets.length} 筆委託？`)) {
+      return;
+    }
+    setBusy(true);
+    let ok = 0;
+    const fails: string[] = [];
+    try {
+      for (const item of targets) {
+        try {
+          const result = await cancelWorkingOrder({
+            order_no: item.order_no,
+            symbol: item.symbol,
+            side: item.side,
+            price: item.price,
+            quantity: workingRemainingLots(item),
+            price_flag: item.price_flag,
+            order_type: item.order_type
+          });
+          if (result.accepted) ok += 1;
+          else fails.push(item.order_no);
+        } catch {
+          fails.push(item.order_no);
+        }
+      }
+      setMessage(fails.length ? `刪單完成 ${ok} 筆，失敗：${fails.join("、")}` : `已刪單 ${ok} 筆。`);
+      setOrderSelected(new Set());
+      await Promise.all([refreshWorkingOrders(), refreshOrderReport()]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // MIT：批次取消「已勾選且狀態為等待中」的觸價單。
+  async function cancelSelectedMit() {
+    const targets = mitOrders.filter((m) => mitSelected.has(m.id) && m.status === "pending");
+    if (!targets.length) {
+      setMessage("沒有可取消的觸價單（僅「等待中」可取消）。");
+      return;
+    }
+    if (!window.confirm(`確定取消選取的 ${targets.length} 筆 MIT 觸價單？`)) {
+      return;
+    }
+    setBusy(true);
+    let ok = 0;
+    let fail = 0;
+    try {
+      for (const item of targets) {
+        try {
+          await cancelMitOrder(item.id);
+          ok += 1;
+        } catch {
+          fail += 1;
+        }
+      }
+      setMessage(fail ? `取消完成 ${ok} 筆，失敗 ${fail} 筆。` : `已取消 ${ok} 筆 MIT 觸價單。`);
+      setMitSelected(new Set());
+      await refreshMitOrders();
     } finally {
       setBusy(false);
     }
@@ -1256,6 +1329,8 @@ function App({ theme, setTheme, onLogout }: AppProps) {
       setMessage(`${result.accepted ? "送單已送出" : "送單被擋"}：${result.message}`);
       if (result.accepted) {
         void refreshWorkingOrders();
+        void refreshOrderReport();
+        void refreshPositions(true); // 部位有變動立刻更新
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "送單失敗。");
@@ -1451,9 +1526,6 @@ function App({ theme, setTheme, onLogout }: AppProps) {
       void refreshWorkingOrders();
       void refreshPositions(true);
       void getKillSwitch().then((result) => setKillSwitchOn(result.enabled)).catch(() => undefined);
-      if (mainTab === "trades") {
-        void refreshTrades();
-      }
       if (mainTab === "orders") {
         void refreshOrderReport();
       }
@@ -1558,8 +1630,7 @@ function App({ theme, setTheme, onLogout }: AppProps) {
       <div className="layoutGrid">
         <section className="zone zone1 terminalPanel">
           <div className="tabs">
-            <button className={mainTab === "orders" ? "active" : ""} onClick={() => setMainTab("orders")}>證券 委託查詢</button>
-            <button className={mainTab === "trades" ? "active" : ""} onClick={() => setMainTab("trades")}>證券 成交查詢</button>
+            <button className={mainTab === "orders" ? "active" : ""} onClick={() => setMainTab("orders")}>證券成交委託查詢</button>
             <button className={mainTab === "mit" ? "active" : ""} onClick={() => setMainTab("mit")}>MIT 委託單</button>
             <button className={mainTab === "inventory" ? "active" : ""} onClick={() => setMainTab("inventory")}>證券 庫存下單</button>
           </div>
@@ -1581,7 +1652,6 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                   onClick={() => {
                     void refreshWorkingOrders();
                     void refreshOrderReport();
-                    void refreshTrades();
                     void refreshPositions();
                   }}
                   disabled={busy}
@@ -1592,10 +1662,31 @@ function App({ theme, setTheme, onLogout }: AppProps) {
               </div>
               {mainTab === "orders" ? (
                 <div className="scrollPane">
+                  <div className="watchToolbar invToolbar">
+                    <button
+                      disabled={busy || cancellableOrderNos.length === 0 || orderSelected.size === cancellableOrderNos.length}
+                      onClick={() => setOrderSelected(new Set(cancellableOrderNos))}
+                    >
+                      <CheckSquare size={14} />全部選擇
+                    </button>
+                    <button
+                      disabled={busy || orderSelected.size === 0}
+                      onClick={() => setOrderSelected(new Set())}
+                    >
+                      <Square size={14} />全部取消
+                    </button>
+                    <button
+                      className="danger"
+                      disabled={busy || orderSelected.size === 0}
+                      onClick={() => void cancelSelectedOrders()}
+                    >
+                      <Trash2 size={14} />全部刪單（{orderSelected.size}）
+                    </button>
+                  </div>
                   <table className="denseTable adaptiveTable" style={ordersResize.tableStyle}>
                     <thead>
                       <tr>
-                        {["動作", "委託書號", "商品", "買賣", "價格", "委託", "成交", "剩餘", "狀態"].map((label, index) => (
+                        {["動作", "商品", "買賣", "價格", "委託", "成交", "剩餘", "狀態", "委託書號"].map((label, index) => (
                           <Th key={label} col={index} resize={ordersResize}>{label}</Th>
                         ))}
                       </tr>
@@ -1603,20 +1694,38 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                     <tbody>
                       {displayedOrders.map((item) => (
                         <tr key={item.order_no} onClick={() => selectForChart(item.symbol)}>
-                          <td>
-                            <button
-                              className="iconButton danger"
-                              disabled={busy}
-                              title="刪單（免確認）"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void cancelOneWorkingOrder(item);
-                              }}
-                            >
-                              <X size={13} />
-                            </button>
+                          <td className="actionCell">
+                            {isOrderCancellable(item) ? (
+                              <>
+                                <input
+                                  type="checkbox"
+                                  className="rowCheck"
+                                  checked={orderSelected.has(item.order_no)}
+                                  onClick={(event) => event.stopPropagation()}
+                                  onChange={(event) => {
+                                    const checked = event.target.checked;
+                                    setOrderSelected((current) => {
+                                      const next = new Set(current);
+                                      if (checked) next.add(item.order_no);
+                                      else next.delete(item.order_no);
+                                      return next;
+                                    });
+                                  }}
+                                />
+                                <button
+                                  className="iconButton danger"
+                                  disabled={busy}
+                                  title="刪單（免確認）"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void cancelOneWorkingOrder(item);
+                                  }}
+                                >
+                                  <X size={13} />
+                                </button>
+                              </>
+                            ) : null}
                           </td>
-                          <td>{item.order_no}</td>
                           <td>{item.name} {item.symbol}</td>
                           <td className={item.side === "B" ? "down" : "up"}>{item.side === "B" ? "買" : "賣"}</td>
                           <td>{item.price_flag === "M" ? "市價" : numberText(item.price)}</td>
@@ -1625,13 +1734,14 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                           <td>{numberText((item.after_qty - item.ok_qty) / 1000, 0)}</td>
                           <td>
                             {item.cancelled
-                              ? "取消"
+                              ? "已取消"
                               : item.ok_qty > 0 && item.ok_qty >= item.after_qty
                                 ? "已成交"
                                 : item.ok_qty > 0
-                                  ? "部分成交"
+                                  ? "部份成交"
                                   : "未成交"}
                           </td>
+                          <td>{item.order_no}</td>
                         </tr>
                       ))}
                       {displayedOrders.length === 0 ? (
@@ -1641,40 +1751,33 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                   </table>
                 </div>
               ) : null}
-              {mainTab === "trades" ? (
-                <div className="scrollPane">
-                  <table className="denseTable tradeTable" style={tradesResize.tableStyle}>
-                    <thead>
-                      <tr>
-                        {["時間", "商品", "買賣", "成交價", "張數", "委託書號"].map((label, index) => (
-                          <Th key={label} col={index} resize={tradesResize}>{label}</Th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {trades.map((trade, index) => (
-                        <tr key={`${trade.order_no}-${index}`} onClick={() => selectForChart(trade.symbol)}>
-                          <td>{trade.time}</td>
-                          <td>{trade.name} {trade.symbol}</td>
-                          <td className={trade.side === "B" ? "down" : "up"}>{trade.side === "B" ? "買" : "賣"}</td>
-                          <td>{numberText(trade.price)}</td>
-                          <td>{numberText(trade.quantity / 1000, 0)}</td>
-                          <td>{trade.order_no}</td>
-                        </tr>
-                      ))}
-                      {trades.length === 0 ? (
-                        <tr><td colSpan={6}>{yuantaStatus?.connected ? "今日尚無成交。" : "請先連線券商後按「查詢」。"}</td></tr>
-                      ) : null}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
               {mainTab === "mit" ? (
                 <div className="scrollPane">
+                  <div className="watchToolbar invToolbar">
+                    <button
+                      disabled={busy || pendingMitIds.length === 0 || mitSelected.size === pendingMitIds.length}
+                      onClick={() => setMitSelected(new Set(pendingMitIds))}
+                    >
+                      <CheckSquare size={14} />全部選擇
+                    </button>
+                    <button
+                      disabled={busy || mitSelected.size === 0}
+                      onClick={() => setMitSelected(new Set())}
+                    >
+                      <Square size={14} />全部取消
+                    </button>
+                    <button
+                      className="danger"
+                      disabled={busy || mitSelected.size === 0}
+                      onClick={() => void cancelSelectedMit()}
+                    >
+                      <Trash2 size={14} />全部刪單（{mitSelected.size}）
+                    </button>
+                  </div>
                 <table className="denseTable tradeTable" style={mitResize.tableStyle}>
                   <thead>
                     <tr>
-                      {["時間", "商品", "買賣", "觸價", "張數", "狀態", "訊息", "動作"].map((label, index) => (
+                      {["動作", "商品", "買賣", "觸價", "委託", "成交", "剩餘", "狀態", "時間", "觸發單號"].map((label, index) => (
                         <Th key={label} col={index} resize={mitResize}>{label}</Th>
                       ))}
                     </tr>
@@ -1682,34 +1785,51 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                   <tbody>
                     {mitOrders.map((item) => (
                       <tr key={item.id} onClick={() => selectForChart(item.symbol)}>
-                        <td>{item.created_at.replace("T", " ")}</td>
-                        <td>{item.symbol}</td>
+                        <td className="actionCell">
+                          {item.status === "pending" ? (
+                            <>
+                              <input
+                                type="checkbox"
+                                className="rowCheck"
+                                checked={mitSelected.has(item.id)}
+                                onClick={(event) => event.stopPropagation()}
+                                onChange={(event) => {
+                                  const checked = event.target.checked;
+                                  setMitSelected((current) => {
+                                    const next = new Set(current);
+                                    if (checked) next.add(item.id);
+                                    else next.delete(item.id);
+                                    return next;
+                                  });
+                                }}
+                              />
+                              <button
+                                className="iconButton danger"
+                                title="取消觸價單"
+                                disabled={busy}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleCancelMit(item.id);
+                                }}
+                              >
+                                <X size={13} />
+                              </button>
+                            </>
+                          ) : null}
+                        </td>
+                        <td>{nameFor(item.symbol)} {item.symbol}</td>
                         <td className={item.side === "B" ? "down" : "up"}>{item.side === "B" ? "買" : "賣"}</td>
                         <td>{formatPrice(item.trigger_price)}</td>
                         <td>{item.quantity}</td>
-                        <td className={item.status === "failed" ? "down" : item.status === "sent" ? "up" : ""}>
-                          {MIT_STATUS_TEXT[item.status] ?? item.status}
-                        </td>
-                        <td title={item.message}>{item.order_no || item.message || "-"}</td>
-                        <td>
-                          {item.status === "pending" ? (
-                            <button
-                              className="iconButton danger"
-                              title="取消觸價單"
-                              disabled={busy}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void handleCancelMit(item.id);
-                              }}
-                            >
-                              <X size={13} />
-                            </button>
-                          ) : null}
-                        </td>
+                        <td>{numberText((item.filled_qty ?? 0) / 1000, 0)}</td>
+                        <td>{numberText(item.quantity - (item.filled_qty ?? 0) / 1000, 0)}</td>
+                        <td title={item.message}>{mitStatusText(item)}</td>
+                        <td>{item.created_at.replace("T", " ")}</td>
+                        <td>{item.order_no || "-"}</td>
                       </tr>
                     ))}
                     {mitOrders.length === 0 ? (
-                      <tr><td colSpan={8}>尚無 MIT 觸價單。於閃電下單點 MIT 建立。</td></tr>
+                      <tr><td colSpan={10}>尚無 MIT 觸價單。於閃電下單點 MIT 建立。</td></tr>
                     ) : null}
                   </tbody>
                 </table>
@@ -1722,13 +1842,13 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                       disabled={busy || positions.length === 0 || invSelected.size === positions.length}
                       onClick={() => setInvSelected(new Set(positions.map((item) => item.symbol)))}
                     >
-                      全部選擇
+                      <CheckSquare size={14} />全部選擇
                     </button>
                     <button
                       disabled={busy || invSelected.size === 0}
                       onClick={() => setInvSelected(new Set())}
                     >
-                      全部取消
+                      <Square size={14} />全部取消
                     </button>
                     <button
                       className="primary"

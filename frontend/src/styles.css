@@ -1021,6 +1021,17 @@ dd {
   white-space: nowrap;
 }
 
+/* 委託查詢／MIT 的「動作」欄：列勾選框 + 刪單鈕並排。 */
+.actionCell {
+  white-space: nowrap;
+}
+
+.rowCheck {
+  vertical-align: middle;
+  margin-right: 4px;
+  cursor: pointer;
+}
+
 .watchlistBar {
   align-items: center;
   flex-wrap: wrap;

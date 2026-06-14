@@ -165,6 +165,8 @@ export type MitOrderRecord = {
   triggered_at: string | null;
   order_no: string | null;
   message: string;
+  filled_qty?: number; // 觸發後送出委託的成交股數（後端回查回填）
+  order_cancelled?: boolean;
 };
 
 export type OrderResult = {
