@@ -431,6 +431,17 @@ class FugleMarketData:
     def five_version(self) -> int:
         return self._five_version
 
+    def close(self) -> None:
+        """best-effort 關閉 WS 連線（設定變更/重置時用），避免舊金鑰的連線殘留。"""
+        ws = self._ws
+        self._ws = None
+        self._ws_authed = False
+        if ws is not None:
+            try:
+                ws.stock.disconnect()
+            except Exception:  # noqa: BLE001
+                pass
+
 
 _fugle: FugleMarketData | None = None
 
@@ -440,3 +451,11 @@ def get_fugle() -> FugleMarketData:
     if _fugle is None:
         _fugle = FugleMarketData()
     return _fugle
+
+
+def reset_fugle() -> None:
+    """丟棄目前的 Fugle 單例（含快取的 REST/WS），下次取用時以最新設定（如新 API key）重建。"""
+    global _fugle
+    if _fugle is not None:
+        _fugle.close()
+    _fugle = None

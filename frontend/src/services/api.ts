@@ -68,6 +68,7 @@ export type LoginPayload = {
   api_key?: string;
   secret_key?: string;
   person_id?: string;
+  fugle_api_key?: string;
   remember?: Record<string, boolean>;
 };
 

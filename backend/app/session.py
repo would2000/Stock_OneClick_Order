@@ -138,6 +138,24 @@ def _apply_credentials(broker: str, req: LoginRequest, settings) -> None:
     _save_credentials(stored)
 
 
+def _apply_fugle_key(req: LoginRequest, settings) -> None:
+    """套用登入畫面填入的富果金鑰：填了就存進受限儲存並記住，留白沿用已儲存值。
+
+    模擬沙盒用它把合成報價升級為真實行情；金鑰有變動時重置 Fugle 連線以套用新值。
+    """
+    stored = _load_credentials()
+    value = (req.fugle_api_key or "").strip()
+    if value and value != stored.get("fugle_api_key"):
+        stored["fugle_api_key"] = value
+        _save_credentials(stored)
+    effective = value or stored.get("fugle_api_key") or settings.fugle_api_key
+    if effective != settings.fugle_api_key:
+        settings.fugle_api_key = effective
+        from .brokers.fugle_client import reset_fugle  # noqa: PLC0415
+
+        reset_fugle()
+
+
 def _reset_runtime_flags() -> None:
     """把實單相關旗標還原為非實單安全預設，避免上一次實單登入殘留到 sim / 登出後
     （否則 yuanta_enable_order 會永久 True、health 一直回報實單）。"""
@@ -179,6 +197,8 @@ def login(req: LoginRequest) -> LoginState:
     _disconnect_all()
     # 每次登入前先還原為非實單安全預設，再依環境設定，避免旗標殘留。
     _reset_runtime_flags()
+    # 富果金鑰（選填，各環境通用）：讓模擬沙盒也能用真實行情。
+    _apply_fugle_key(req, settings)
 
     if req.environment == "sim":
         # 沙盒改為持久化模擬帳戶：登入時不再清空，委託/成交/部位保留在 trading.db。

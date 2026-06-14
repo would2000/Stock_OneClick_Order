@@ -15,6 +15,9 @@ const ENVIRONMENTS: { id: LoginEnvironment; label: string; hint: string }[] = [
 // 永豐金 Shioaji API Key 申請說明
 const SINOPAC_APIKEY_URL = "https://www.sinotrade.com.tw/newweb/Main/quote/api/";
 
+// 富果 Fugle MarketData API Key 申請（模擬環境用真實行情）
+const FUGLE_APIKEY_URL = "https://developer.fugle.tw/";
+
 // 登入欄位 → 後端 Settings 屬性（用來對應「已記住」狀態，預先勾選）。
 const REMEMBER_ATTR: Record<string, Record<string, string>> = {
   yuanta: { account: "yuanta_account", password: "yuanta_password", cert_password: "yuanta_cert_password" },
@@ -231,7 +234,25 @@ export function LoginScreen({ onLoggedIn }: LoginScreenProps) {
         <div className="loginBody">
           <div className="loginFields">
             {env === "sim" ? (
-              <p className="loginNote">模擬環境不需帳號或憑證，登入後可不受限制地測試下單流程（不會送出任何真實委託）。</p>
+              <>
+                <p className="loginNote">模擬環境不需帳號或憑證，登入後可不受限制地測試下單流程（不會送出任何真實委託）。</p>
+                <MaskField
+                  label="富果 API Key（選填）"
+                  value={form.fugle_api_key ?? ""}
+                  placeholder={
+                    rememberedKeys.includes("fugle_api_key")
+                      ? "已儲存，留白沿用（換新金鑰可重填）"
+                      : "填入後沙盒改用真實行情；留白則用合成報價"
+                  }
+                  defaultMasked
+                  labelRight={
+                    <a href={FUGLE_APIKEY_URL} target="_blank" rel="noreferrer" className="loginExtLink">
+                      申請富果 API Key <ExternalLink size={12} />
+                    </a>
+                  }
+                  onChange={(v) => setField("fugle_api_key", v)}
+                />
+              </>
             ) : null}
 
             {env === "yuanta" ? (

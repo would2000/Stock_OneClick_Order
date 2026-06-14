@@ -172,6 +172,8 @@ class LoginRequest(BaseModel):
     api_key: str = ""
     secret_key: str = ""
     person_id: str = ""
+    # 富果報價金鑰（選填）：填入後模擬沙盒改用真實行情，留白沿用已儲存值。
+    fugle_api_key: str = ""
     # 各欄位是否記住（鍵為欄位名：account/password/cert_password/api_key/secret_key/person_id）
     remember: dict[str, bool] = {}
 
