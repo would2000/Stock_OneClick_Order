@@ -1,0 +1,7 @@
+# 永豐金（SinoPac）券商 SDK — 選用相依。
+# 只有要接永豐金（Shioaji）時才需要安裝；只接元大的使用者可略過。
+#
+#   .venv/bin/python -m pip install -r requirements-sinopac.txt
+#
+# 版本鎖定在開發/測試過的版本；shioaji 偶有破壞性更新，升級前請先驗證。
+shioaji==1.5.3

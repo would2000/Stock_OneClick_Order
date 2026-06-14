@@ -74,7 +74,13 @@ npm --prefix frontend install
 >
 > 所以只要使用者把 SDK 解壓成 `YuantaSparkAPI_*_Python/`，**任何平台都會自動命中**；名稱特殊時，請他在 `.env` 加 `YUANTA_SDK_DIR=/絕對路徑` 指定即可。
 
-永豐金（Shioaji）走 `pip` 的 `shioaji` 套件，需要時再 `.venv/bin/python -m pip install shioaji`，並準備永豐的憑證與 API key。
+永豐金（Shioaji）的 SDK 是 **PyPI 套件**（不像元大要下載 DLL），裝在 venv 即可。只有要接永豐時才需要，請使用**選用相依檔**：
+
+```bash
+.venv/bin/python -m pip install -r requirements-sinopac.txt   # 內含 shioaji
+```
+
+接永豐還需準備永豐的憑證（`.pfx`/CA）與 API key，填到 `.env` 的 `SHIOAJI_*` 欄位。只接元大的使用者可整段略過。
 
 ---
 

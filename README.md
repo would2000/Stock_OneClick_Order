@@ -87,6 +87,8 @@ python3.11 -m venv .venv
 
 > Windows 使用者請改用對應的 PowerShell 指令，並確認 SDK 下載的是 Windows 版（見上方「開源使用前必讀」）。
 
+> 接**永豐金（Shioaji）**才需要的選用相依：`.venv/bin/python -m pip install -r requirements-sinopac.txt`（只接元大可略過）。元大 SDK 不在 PyPI，需另行向元大下載 DLL（見「開源使用前必讀」第 2 點）。
+
 ## 2. 填入帳密
 
 `.env` 已經建立好，請直接編輯 `.env`，填入：
