@@ -22,10 +22,10 @@ def require_api_key(provided: str | None = Security(_api_key_header)) -> None:
     if not expected:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="伺服器未設定 API_KEY，敏感端點已停用。請於 .env 設定 API_KEY。",
+            detail="伺服器尚未設定存取金鑰（API_KEY），下單與連線等需保護的功能已停用。請在 .env 設定 API_KEY 後重新啟動程式。",
         )
     if not provided or not secrets.compare_digest(provided, expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="X-API-Key 無效或缺少。",
+            detail="存取金鑰不正確或未提供（請確認瀏覽器的 VITE_API_KEY 與伺服器的 API_KEY 設為相同值）。",
         )

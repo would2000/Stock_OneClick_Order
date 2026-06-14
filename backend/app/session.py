@@ -34,6 +34,7 @@ _ERROR_RULES: list[tuple[str, str]] = [
     ("connection", "網路連線失敗，請檢查網路後再試。"),
     ("password", "密碼錯誤，請確認後重試。"),
     ("account", "帳號錯誤，請確認後重試。"),
+    ("sdk folder not found", "找不到元大交易元件（SDK），請依 README 向元大下載對應平台的 SDK 放到專案資料夾後再試。"),
     ("missing .dotnet", "缺少 .NET 執行環境，請依 README 安裝後再試。"),
     ("yuanta_env must be", "環境設定錯誤（YUANTA_ENV 必須為 UAT 或 PROD）。"),
     ("missing shioaji_api_key", "尚未設定永豐 API Key / Secret Key。"),

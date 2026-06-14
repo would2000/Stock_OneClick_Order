@@ -800,9 +800,9 @@ function App({ theme, setTheme, onLogout }: AppProps) {
       }
       void refreshMitOrders();
       void getBrokerInfo().then(setBrokerInfo).catch(() => undefined);
-      setMessage("後端已連線。");
+      setMessage("報價已連線。");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Failed to connect backend.");
+      setMessage(error instanceof Error ? error.message : "報價連線失敗。");
     } finally {
       setBusy(false);
     }
@@ -1176,7 +1176,7 @@ function App({ theme, setTheme, onLogout }: AppProps) {
         setMessage(
           killSwitchOn
             ? "MIT 觸價單已登錄，但風控停損目前啟用中——觸價也不會送單。"
-            : "MIT 觸價單已登錄後端，觸價後將自動以市價送單。"
+            : "MIT 觸價單已登錄，觸價後將自動以市價送單。"
         );
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "MIT 觸價單建立失敗。");
@@ -1226,12 +1226,12 @@ function App({ theme, setTheme, onLogout }: AppProps) {
     try {
       const status = await connectYuanta();
       setYuantaStatus(status);
-      setMessage(status.connected ? `${brokerLabel} API 已連線。` : status.last_error || `${brokerLabel} API 連線失敗。`);
+      setMessage(status.connected ? `${brokerLabel}已連線。` : status.last_error || `${brokerLabel}連線失敗。`);
       if (status.connected) {
         refreshIndexIntraday(true);
       }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : `${brokerLabel} API 連線失敗。`);
+      setMessage(error instanceof Error ? error.message : `${brokerLabel}連線失敗。`);
       setYuantaStatus(await getYuantaStatus().catch(() => null));
     } finally {
       setBusy(false);
