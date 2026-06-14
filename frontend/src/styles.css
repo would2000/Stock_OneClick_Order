@@ -1,0 +1,2268 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button,
+select,
+input {
+  min-height: 26px;
+}
+
+button {
+  align-items: center;
+  background: var(--button-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  gap: 5px;
+  justify-content: center;
+  padding: 3px 8px;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+select,
+input {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  padding: 2px 6px;
+}
+
+.appShell {
+  --bg: #eef2f4;
+  --panel: #ffffff;
+  --panel-alt: #f5f7f8;
+  --header: #17202a;
+  --header-text: #ffffff;
+  --text: #18202b;
+  --muted: #60717e;
+  --border: #b8c4cc;
+  --grid: #dce3e8;
+  --tab: #d8e0e5;
+  --tab-active: #fff33b;
+  --tab-active-text: #111111;
+  --button-bg: #f8fafb;
+  --input-bg: #ffffff;
+  --accent: #12635f;
+  --danger: #a6252a;
+  --up: #008a45;
+  --down: #c91f2e;
+  --chart-main: #d6c600;
+  --chart-focus: #ff473a;
+  --chart-secondary: #22b35b;
+  --chart-price: #c08a00;
+  --ladder-buy: #c91f2e;
+  --ladder-sell: #1a8a45;
+  background: var(--bg);
+  color: var(--text);
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  height: 100vh;
+  overflow: hidden;
+  padding: 6px;
+}
+
+.theme-dark {
+  --bg: #050606;
+  --panel: #090b0c;
+  --panel-alt: #151718;
+  --header: #050505;
+  --header-text: #f4f4f4;
+  --text: #f4f7f5;
+  --muted: #a7b3b5;
+  --border: #555f62;
+  --grid: #2c393c;
+  --tab: #1f2473;
+  --tab-active: #f0e431;
+  --tab-active-text: #101010;
+  --button-bg: #141819;
+  --input-bg: #0d1011;
+  --accent: #00bcd0;
+  --danger: #b91c32;
+  --up: #00ff51;
+  --down: #ff263d;
+  --chart-main: #f2e900;
+  --chart-focus: #ff4438;
+  --chart-secondary: #10d469;
+  --chart-price: #f5d31a;
+  --ladder-buy: #ff9aa8;
+  --ladder-sell: #6fe0a0;
+}
+
+.theme-warm {
+  --bg: #f3eee7;
+  --panel: #fffaf2;
+  --panel-alt: #f6eadc;
+  --header: #37261d;
+  --header-text: #fff7ef;
+  --text: #2b211b;
+  --muted: #745e4d;
+  --border: #c8ad96;
+  --grid: #e2cbb8;
+  --tab: #ead7c4;
+  --tab-active: #b94f2f;
+  --tab-active-text: #ffffff;
+  --button-bg: #fff5e8;
+  --input-bg: #fffaf2;
+  --accent: #8b5e23;
+  --danger: #9d2f28;
+  --up: #247c3d;
+  --down: #b32929;
+  --chart-main: #ba7c19;
+  --chart-focus: #c43d2f;
+  --chart-secondary: #2c8553;
+  --chart-price: #b8770a;
+  --ladder-buy: #b32929;
+  --ladder-sell: #2f8a4e;
+}
+
+.theme-cool {
+  --bg: #eaf4f7;
+  --panel: #f8fcfd;
+  --panel-alt: #e1eef3;
+  --header: #12323d;
+  --header-text: #f1fbff;
+  --text: #14272f;
+  --muted: #4f6974;
+  --border: #9bb5c0;
+  --grid: #c4d8df;
+  --tab: #cce4eb;
+  --tab-active: #007a8d;
+  --tab-active-text: #ffffff;
+  --button-bg: #f7fcfd;
+  --input-bg: #ffffff;
+  --accent: #006d83;
+  --danger: #a22a3b;
+  --up: #007f49;
+  --down: #c2293a;
+  --chart-main: #006d83;
+  --chart-focus: #c4364a;
+  --chart-secondary: #2a8b69;
+  --chart-price: #b8860b;
+  --ladder-buy: #c2293a;
+  --ladder-sell: #0f9457;
+}
+
+.commandBar {
+  align-items: center;
+  background: var(--header);
+  border: 1px solid var(--border);
+  color: var(--header-text);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 5px 8px;
+}
+
+.brandBlock h1 {
+  font-size: 18px;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.brandBlock p {
+  color: color-mix(in srgb, var(--header-text) 78%, transparent);
+  font-size: 12px;
+  margin: 3px 0 0;
+}
+
+.testDock {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: flex-end;
+}
+
+.testDock button,
+.testDock select {
+  min-width: 78px;
+}
+
+.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #ffffff;
+}
+
+.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.messageLine {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-top: 0;
+  display: flex;
+  font-size: 12px;
+  justify-content: space-between;
+  min-height: 28px;
+  padding: 4px 8px;
+}
+
+.layoutGrid {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  height: calc(100vh - 88px);
+  min-height: 0;
+  padding-top: 5px;
+}
+
+.zone {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.zone1 {
+  grid-column: 1 / 3;
+  grid-row: 1;
+}
+
+.zoneFlash {
+  grid-column: 3;
+  grid-row: 1 / 3;
+}
+
+.zone2 {
+  grid-column: 4;
+  grid-row: 1;
+}
+
+.zone3 {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.zone4 {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.zone6 {
+  grid-column: 4;
+  grid-row: 2;
+}
+
+.indexTabZone {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.indexTabBar {
+  border: 1px solid var(--border);
+  border-bottom: 0;
+}
+
+.terminalPanel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tabs {
+  align-items: end;
+  background: var(--panel-alt);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 2px;
+  min-height: 28px;
+  padding: 2px 4px 0;
+}
+
+.tabs button {
+  background: var(--tab);
+  border-bottom: 0;
+  border-radius: 4px 4px 0 0;
+  font-size: 13px;
+  min-height: 25px;
+  padding: 3px 9px;
+}
+
+.tabs button.active {
+  background: var(--tab-active);
+  color: var(--tab-active-text);
+  font-weight: 700;
+}
+
+.workArea {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+}
+
+.queryPane {
+  border-right: 1px solid var(--border);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+}
+
+.queryPane > table {
+  align-self: start;
+}
+
+.filterBar {
+  background: var(--panel-alt);
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 5px;
+  grid-template-columns: 1.2fr 1fr 1.2fr auto auto;
+  padding: 4px;
+}
+
+.orderDock {
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 5px;
+}
+
+.windowTitle {
+  align-items: center;
+  background: var(--panel-alt);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  display: flex;
+  font-size: 13px;
+  justify-content: space-between;
+  min-height: 28px;
+  padding: 4px 6px;
+}
+
+.windowTitle span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+label {
+  color: var(--muted);
+  display: grid;
+  font-size: 12px;
+  gap: 2px;
+}
+
+.ticketGrid {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.segmented {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.segmented .selected {
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.check {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+}
+
+.check input {
+  width: auto;
+}
+
+.orderActions {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.lightningHeader {
+  align-items: start;
+  display: grid;
+  gap: 5px;
+  grid-template-columns: minmax(0, 1fr) 78px;
+}
+
+.lightningHeader input {
+  min-width: 0;
+  width: 100%;
+}
+
+.lightningQuote {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto auto;
+  min-height: 28px;
+  padding: 3px 6px;
+}
+
+.lightningQuote strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lightningQuote b {
+  font-size: 15px;
+}
+
+.lightningQuote span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.lightningBody {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+}
+
+.priceLadder,
+.todayHoldings {
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ladderHeader,
+.ladderRow {
+  display: grid;
+  /* 刪單欄（首尾）保有 40px 可點擊下限、並能隨視窗放大成長；中間欄最小寬度調小，
+     讓整體在窄視窗時優先壓縮中間欄，刪單欄不被擠到裁切/點不到。 */
+  grid-template-columns:
+    minmax(40px, 0.6fr) minmax(20px, 0.55fr) minmax(24px, 0.75fr) minmax(30px, 1fr) minmax(44px, 1.3fr)
+    minmax(30px, 1fr) minmax(24px, 0.75fr) minmax(20px, 0.55fr) minmax(40px, 0.6fr);
+}
+
+/* 用 .priceLadder 提高特異性，蓋過 .cancelCell 的 border:0，讓刪單欄也有直線分隔 */
+.priceLadder .ladderRow > * {
+  border-right: 1px solid var(--border);
+}
+
+.priceLadder .ladderRow > *:last-child {
+  border-right: 0;
+}
+
+.ladderHeader {
+  background: var(--panel-alt);
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  min-height: 20px;
+  /* 對齊下方 ladderRows 保留的捲軸槽，使表頭與資料欄位垂直對齊 */
+  padding-right: 10px;
+}
+
+.ladderHeader span {
+  align-content: center;
+  overflow: hidden;
+  padding: 2px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ladderRows {
+  background: var(--panel);
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* 保留捲軸槽，避免垂直捲軸蓋住最右邊的刪單欄而點不到 */
+  scrollbar-gutter: stable;
+}
+
+.ladderRows::-webkit-scrollbar {
+  width: 10px;
+}
+
+.ladderRows::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 5px;
+}
+
+.ladderRows::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ladderRow {
+  border-bottom: 1px solid var(--border);
+  min-height: 24px;
+}
+
+.ladderHeader span {
+  border-right: 1px solid var(--border);
+}
+
+.ladderHeader span:last-child {
+  border-right: 0;
+}
+
+.ladderRow strong {
+  align-content: center;
+  background: var(--tab-active);
+  color: var(--tab-active-text);
+  font-size: 12px;
+  font-weight: 800;
+  overflow: hidden;
+  padding: 1px 3px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ladderRow.current strong {
+  border: 2px solid var(--bg);
+  outline: 1px solid var(--text);
+}
+
+.ladderRow.limitUp strong {
+  background: var(--down);
+  color: #ffffff;
+}
+
+.ladderRow.limitDown strong {
+  background: var(--up);
+  color: #ffffff;
+}
+
+.ladderRow button {
+  border: 0;
+  border-radius: 0;
+  font-size: 11px;
+  min-height: 24px;
+  min-width: 0;
+  padding: 0 2px;
+}
+
+.mitCell {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.mitCell.buy {
+  background: rgba(255, 90, 110, 0.1);
+  color: var(--ladder-buy);
+}
+
+.mitCell.sell {
+  background: color-mix(in srgb, var(--ladder-sell) 14%, transparent);
+  color: var(--ladder-sell);
+}
+
+.mitCell:hover {
+  filter: brightness(1.5);
+}
+
+.orderCell.buy {
+  background: rgba(255, 130, 150, 0.16);
+  color: var(--ladder-buy);
+}
+
+.orderCell.sell {
+  background: color-mix(in srgb, var(--ladder-sell) 18%, transparent);
+  color: var(--ladder-sell);
+}
+
+.orderCell.buy.inBook {
+  background: rgba(255, 110, 130, 0.34);
+}
+
+.orderCell.sell.inBook {
+  background: color-mix(in srgb, var(--ladder-sell) 38%, transparent);
+}
+
+.orderCell:hover {
+  filter: brightness(1.45);
+}
+
+.fiveVolCell {
+  align-content: center;
+  color: var(--text);
+  font-size: 11px;
+  overflow: hidden;
+  padding: 0 3px;
+  text-align: right;
+}
+
+.fiveVolCell.bid {
+  background: rgba(255, 90, 110, 0.1);
+}
+
+.fiveVolCell.ask {
+  background: color-mix(in srgb, var(--ladder-sell) 12%, transparent);
+}
+
+.fiveVolCell.best {
+  font-weight: 800;
+  outline: 1px solid var(--text);
+  outline-offset: -1px;
+}
+
+.cancelCell {
+  align-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--muted);
+  font-size: 11px;
+  min-height: 24px;
+  min-width: 0;
+  padding: 0 2px;
+}
+
+.cancelCell.buy,
+.cancelCell.sell {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  color: var(--danger);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.flashStats {
+  align-items: center;
+  border-top: 1px solid var(--border);
+  display: flex;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 6px;
+  justify-content: space-between;
+  padding: 3px 6px;
+}
+
+.flashStatBuy {
+  color: var(--ladder-buy);
+}
+
+.flashStatSell {
+  color: var(--ladder-sell);
+}
+
+.flashBar {
+  display: grid;
+  gap: 2px;
+  grid-template-columns: 1.1fr 1fr 1.1fr 1fr 1.1fr;
+  padding: 3px;
+}
+
+.flashBar button {
+  font-size: 11px;
+  min-height: 24px;
+  padding: 2px 2px;
+}
+
+.flashBar .flashBuy {
+  background: color-mix(in srgb, var(--down) 65%, var(--button-bg));
+  border-color: var(--down);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.flashBar .flashSell {
+  background: color-mix(in srgb, var(--up) 55%, var(--button-bg));
+  border-color: var(--up);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.lightningKindRow {
+  display: grid;
+}
+
+.kindToggle button {
+  font-size: 12px;
+  min-height: 24px;
+}
+
+.flashQuoteStrip {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  display: grid;
+  font-size: 11px;
+  gap: 4px;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  min-height: 26px;
+  padding: 3px 6px;
+}
+
+.flashQuoteStrip span {
+  color: var(--muted);
+}
+
+.flashQuoteStrip b {
+  font-size: 13px;
+  text-align: right;
+}
+
+.flashQuoteStrip b.up {
+  color: var(--up);
+}
+
+.flashQuoteStrip b.down {
+  color: var(--down);
+}
+
+.flashQuoteStrip .volText {
+  color: var(--accent);
+}
+
+.holdingList {
+  display: grid;
+  gap: 3px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.holdingItem {
+  align-items: center;
+  display: grid;
+  gap: 1px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  justify-items: stretch;
+  min-height: 38px;
+  padding: 4px;
+  text-align: left;
+}
+
+.holdingItem strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.holdingItem span {
+  color: var(--muted);
+  font-size: 11px;
+  grid-column: 1;
+}
+
+.holdingItem b {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  text-align: right;
+}
+
+.holdingItem.selected {
+  background: color-mix(in srgb, var(--accent) 32%, var(--button-bg));
+}
+
+.confirmStrip {
+  background: color-mix(in srgb, var(--tab-active) 18%, var(--panel));
+  border: 1px solid var(--tab-active);
+  display: grid;
+  gap: 5px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 4px;
+}
+
+.confirmStrip span {
+  align-content: center;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.previewBox,
+.sendResult {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  max-height: 72px;
+  overflow: auto;
+  padding: 6px;
+}
+
+.previewBox.empty {
+  color: var(--muted);
+}
+
+.previewBox.ok,
+.sendResult.ok {
+  background: color-mix(in srgb, var(--up) 14%, var(--panel));
+  border-color: var(--up);
+}
+
+.previewBox.blocked,
+.sendResult.blocked {
+  background: color-mix(in srgb, var(--down) 12%, var(--panel));
+  border-color: var(--down);
+}
+
+.previewHeader {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+dl {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+dl div {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 44px 1fr;
+}
+
+dt {
+  color: var(--muted);
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.sendResult {
+  display: grid;
+  gap: 4px;
+}
+
+.denseTable {
+  border-collapse: collapse;
+  font-size: 12px;
+  width: 100%;
+}
+
+.denseTable thead {
+  background: var(--panel-alt);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.denseTable th,
+.denseTable td {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+  overflow: hidden;
+  padding: 3px 5px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adaptiveTable {
+  table-layout: auto;
+}
+
+.adaptiveTable th,
+.adaptiveTable td {
+  line-height: 1.35;
+  min-height: 24px;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  vertical-align: middle;
+  white-space: normal;
+}
+
+.tradeTable {
+  align-self: start;
+  height: auto;
+  font-size: 11px;
+  table-layout: auto;
+  width: max-content;
+  min-width: 100%;
+}
+
+.tradeTable th,
+.tradeTable td {
+  height: 20px;
+  line-height: 1.15;
+  max-height: 20px;
+  padding: 1px 4px;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.denseTable th {
+  position: relative;
+}
+
+.colResizer {
+  bottom: 0;
+  cursor: col-resize;
+  position: absolute;
+  right: -3px;
+  top: 0;
+  width: 7px;
+  z-index: 2;
+}
+
+.colResizer:hover,
+.colResizer:active {
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.denseTable th:first-child,
+.denseTable td:first-child {
+  text-align: left;
+}
+
+.denseTable tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--panel-alt) 60%, transparent);
+}
+
+.denseTable tbody tr:hover,
+.selectedRow {
+  background: color-mix(in srgb, var(--accent) 18%, transparent) !important;
+}
+
+.alertTable td:last-child {
+  max-width: 160px;
+  text-align: left;
+}
+
+.selectableTable tbody tr {
+  cursor: pointer;
+}
+
+.iconButton {
+  min-height: 22px;
+  min-width: 26px;
+  padding: 2px 5px;
+}
+
+.editableTable input {
+  font-size: 12px;
+  min-height: 22px;
+  width: 100%;
+}
+
+.watchToolbar {
+  background: var(--panel-alt);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 5px;
+  padding: 4px;
+}
+
+.watchlistBar {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.watchlistBar select {
+  flex: 1;
+  min-width: 80px;
+}
+
+.watchlistBar .listNameInput {
+  flex: 1;
+  min-width: 80px;
+}
+
+.watchlistEditLabel {
+  align-self: center;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  margin-right: auto;
+}
+
+.watchlistEditLabel.deleteWarn {
+  color: var(--down);
+}
+
+/* 代碼欄需讓搜尋下拉溢出顯示（denseTable td 預設 overflow:hidden 會裁掉） */
+.editableTable td.symbolTd {
+  overflow: visible;
+}
+
+.editSymbolCell {
+  position: relative;
+}
+
+.editableTable .readonlyInput {
+  background: var(--panel-alt);
+  color: var(--muted);
+  cursor: default;
+  pointer-events: none;
+}
+
+.editSymbolCell input {
+  width: 100%;
+}
+
+.editSymbolCell .symbolSuggest {
+  min-width: 200px;
+}
+
+.up {
+  color: var(--up);
+  font-weight: 700;
+}
+
+.down {
+  color: var(--down);
+  font-weight: 700;
+}
+
+.chartPanel {
+  height: 100%;
+}
+
+.marketJumboPanel {
+  background: #050606;
+}
+
+.marketJumboBody {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.emptyPanel,
+.emptyChart {
+  align-items: center;
+  background: var(--panel);
+  color: var(--muted);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  font-size: 13px;
+  gap: 6px;
+  justify-content: center;
+  min-height: 0;
+  padding: 16px;
+  text-align: center;
+}
+
+.emptyChart {
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+}
+
+.emptyChart strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.quoteStrip {
+  align-items: center;
+  display: grid;
+  font-size: 12px;
+  gap: 6px;
+  grid-template-columns: auto auto 1fr;
+  padding: 4px 8px;
+}
+
+.quoteStrip b {
+  font-size: 15px;
+}
+
+.xqQuoteStrip {
+  background: var(--panel);
+  color: #ffffff;
+  grid-template-columns: auto auto auto auto auto 1fr;
+  min-height: 22px;
+  padding: 2px 6px;
+}
+
+.xqQuoteStrip b {
+  background: #38e05d;
+  color: #001b06;
+  line-height: 1.1;
+  padding: 0 4px;
+}
+
+.chart {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.gridLines line {
+  stroke: #2b3031;
+  stroke-width: 0.45;
+}
+
+.xqJiangboChart {
+  min-height: 0;
+}
+
+.axisUp {
+  fill: #ff3030;
+  font-size: 2.9px;
+  font-weight: 700;
+}
+
+.axisDown {
+  fill: #16f151;
+  font-size: 2.9px;
+  font-weight: 700;
+}
+
+.lastPriceLabel {
+  fill: #16f151;
+  font-size: 3px;
+  font-weight: 800;
+}
+
+.prevCloseLine {
+  stroke: #e8e8e8;
+  stroke-width: 0.35;
+}
+
+.lastPriceLine {
+  stroke: #f6e94a;
+  stroke-width: 0.5;
+}
+
+.highMarker {
+  fill: #ff3030;
+  font-size: 2.8px;
+  font-weight: 700;
+}
+
+.lowMarker {
+  fill: #0ba3ff;
+  font-size: 2.8px;
+  font-weight: 700;
+}
+
+.dealLine {
+  stroke: #ffff2b;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 0.9;
+}
+
+.avgLine {
+  stroke: #427b4b;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 0.55;
+}
+
+.xqVolume {
+  stroke: #b21bc0;
+  stroke-width: 0.45;
+}
+
+.chartFooter {
+  display: grid;
+  font-size: 12px;
+  gap: 4px;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 5px 8px;
+}
+
+.chartFooter span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fiveQuote {
+  border-collapse: collapse;
+  font-size: 11px;
+  width: 100%;
+}
+
+.fiveQuote th,
+.fiveQuote td {
+  border-right: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+  padding: 2px 5px;
+  text-align: right;
+}
+
+.fiveQuote thead {
+  background: var(--panel-alt);
+  color: var(--muted);
+}
+
+.fiveQuote tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--panel-alt) 55%, transparent);
+}
+
+.indexIntradayDemoPage {
+  background: var(--panel);
+  min-height: 100vh;
+  padding: 18px;
+}
+
+.indexIntradayShell {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  width: 100%;
+}
+
+.indexIntradayHeader {
+  align-items: center;
+  background: var(--panel-alt);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 7px 12px;
+}
+
+.indexIntradayHeader h1 {
+  color: var(--text);
+  font-size: 22px;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.indexIntradayHeader span {
+  color: var(--muted);
+  display: block;
+  font-size: 13px;
+  margin-top: 3px;
+}
+
+.indexIntradayHeaderTools {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.indexScaleToggle {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  display: inline-flex;
+  overflow: hidden;
+}
+
+.indexScaleToggle button {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--muted);
+  font-size: 12px;
+  min-height: 24px;
+  min-width: 40px;
+  padding: 2px 7px;
+}
+
+.indexScaleToggle button.active {
+  background: var(--tab-active);
+  color: var(--tab-active-text);
+  font-weight: 800;
+}
+
+.indexIntradayChartArea {
+  min-height: 0;
+}
+
+.indexIntradayEmpty {
+  align-items: center;
+  background: var(--panel);
+  color: var(--muted);
+  display: flex;
+  font-size: 16px;
+  font-weight: 700;
+  height: 100%;
+  justify-content: center;
+  min-height: 0;
+}
+
+.indexQuotePanel {
+  background: var(--panel-alt);
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+}
+
+.indexQuoteCell {
+  align-items: center;
+  border-bottom: 1px solid var(--grid);
+  border-right: 1px solid var(--grid);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 54px;
+  padding: 8px 12px;
+}
+
+.indexQuoteCell span {
+  color: var(--muted);
+  font-size: 18px;
+  white-space: nowrap;
+}
+
+.indexQuoteCell strong {
+  font-size: 25px;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.twUp {
+  color: var(--down);
+}
+
+.twDown {
+  color: var(--up);
+}
+
+.twFlat {
+  color: var(--text);
+}
+
+.twWarn,
+.twVolume {
+  color: var(--accent);
+}
+
+.zone .indexIntradayShell {
+  border-color: var(--border);
+  height: 100%;
+}
+
+.zone .indexIntradayHeader {
+  min-height: 30px;
+  padding: 3px 8px;
+}
+
+.zone .indexIntradayHeader h1 {
+  font-size: 14px;
+}
+
+.zone .indexIntradayHeader span {
+  display: none;
+}
+
+.zone .indexIntradayHeaderTools {
+  gap: 5px;
+}
+
+.zone .indexScaleToggle button {
+  font-size: 11px;
+  min-height: 20px;
+  min-width: 32px;
+  padding: 1px 5px;
+}
+
+.zone .indexQuotePanel {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.zone .indexQuoteCell {
+  gap: 4px;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 24px;
+  padding: 3px 5px;
+}
+
+.zone .indexQuoteCell span {
+  font-size: 11px;
+}
+
+.zone .indexQuoteCell strong {
+  font-size: 13px;
+}
+
+.indexIntradayShell.withFooterTabs {
+  grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.indexIntradayShell.withFooterTabs .chartFooterTabs {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.fiveWithTicks {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.fiveWithTicks .fiveTickTable {
+  flex: none;
+}
+
+.tickTableWrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.tickTable {
+  font-size: 11px;
+  table-layout: fixed;
+}
+
+.tickTable th,
+.tickTable td {
+  padding: 1px 6px;
+}
+
+.tickIn {
+  color: var(--up);
+}
+
+.tickOut {
+  color: var(--down);
+}
+
+.tickFlat {
+  color: var(--text);
+}
+
+.tickEmpty {
+  color: var(--muted);
+  text-align: center !important;
+}
+
+.chartFooterTabs {
+  background: var(--panel-alt);
+  border-top: 1px solid var(--border);
+}
+
+.footerTabBar {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 2px;
+  padding: 2px 4px 0;
+}
+
+.footerTabBar button {
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 4px 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  min-height: 22px;
+  padding: 2px 10px;
+}
+
+.footerTabBar button.active {
+  background: var(--tab-active);
+  color: var(--tab-active-text);
+  font-weight: 700;
+}
+
+.fiveTickTable {
+  border-collapse: collapse;
+  color: var(--text);
+  font-size: 12px;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.fiveTickTable th {
+  background: var(--panel);
+  color: var(--muted);
+  font-weight: 700;
+  padding: 2px 8px;
+}
+
+.fiveTickTable td {
+  border-bottom: 1px solid var(--grid);
+  padding: 2px 8px;
+  text-align: right;
+}
+
+.fiveTickTable td.twUp,
+.fiveTickTable td.twDown,
+.fiveTickTable td.twFlat {
+  font-weight: 700;
+  text-align: center;
+}
+
+.fiveVol {
+  position: relative;
+}
+
+.fiveVol span {
+  position: relative;
+  z-index: 1;
+}
+
+.fiveVol i {
+  bottom: 2px;
+  position: absolute;
+  top: 2px;
+  z-index: 0;
+}
+
+.fiveVol.bid i {
+  background: color-mix(in srgb, var(--down) 28%, transparent);
+  right: 0;
+}
+
+.fiveVol.ask i {
+  background: color-mix(in srgb, var(--ladder-sell) 30%, transparent);
+  left: 0;
+}
+
+.fiveVol.ask {
+  text-align: left;
+}
+
+.confirmOverlay {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 50;
+}
+
+.confirmDialog {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  display: grid;
+  gap: 10px;
+  min-width: 300px;
+  padding: 10px 12px 12px;
+}
+
+.confirmDialog dl div {
+  grid-template-columns: 56px 1fr;
+}
+
+.confirmDialog dd {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.scrollPane {
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.scrollPane .watchToolbar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+.scrollPane .watchToolbar + table thead {
+  top: 35px;
+}
+
+.invLotsInput {
+  font-size: 12px;
+  min-height: 22px;
+  text-align: right;
+  width: 64px;
+}
+
+.invConfirmDialog {
+  max-height: 70vh;
+  max-width: 460px;
+  min-width: 380px;
+  overflow-y: auto;
+}
+
+.invPriceModes {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.invPriceModes button.selected {
+  font-weight: 800;
+}
+
+.confirmDialogActions {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 1.4fr 1fr;
+}
+
+.confirmDialogActions button {
+  min-height: 32px;
+}
+
+.sendingHint {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  gap: 6px;
+}
+
+.envBadge {
+  border-radius: 8px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  margin: 0 6px;
+  padding: 1px 8px;
+}
+
+.envBadge.sim {
+  background: #1d6e34;
+  color: #d8ffe5;
+}
+
+.envBadge.live {
+  background: #a31226;
+  color: #ffe3e7;
+}
+
+/* 閃電面板標題的環境標籤（模擬/實單） */
+.killBadge {
+  background: #a31226;
+  border-radius: 8px;
+  color: #ffe3e7;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  margin-left: 6px;
+  padding: 1px 8px;
+}
+
+.flashEnvTag {
+  border-radius: 6px;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  padding: 1px 6px;
+}
+
+.flashEnvTag.sim {
+  background: #1d6e34;
+  color: #d8ffe5;
+}
+
+.flashEnvTag.live {
+  background: #a31226;
+  color: #ffe3e7;
+}
+
+/* 模擬環境的報價來源標示（富果即時／合成） */
+.flashSrcTag {
+  border-radius: 6px;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  margin-left: 4px;
+  padding: 1px 6px;
+}
+
+.flashSrcTag.real {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  color: var(--accent);
+}
+
+.flashSrcTag.synthetic {
+  background: color-mix(in srgb, var(--muted) 22%, transparent);
+  color: var(--muted);
+}
+
+/* 委託確認框的環境條 */
+.confirmEnvBanner {
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 10px;
+  text-align: center;
+}
+
+.confirmEnvBanner.sim {
+  background: color-mix(in srgb, #1d6e34 28%, transparent);
+  color: var(--up);
+}
+
+.confirmEnvBanner.live {
+  background: #a31226;
+  color: #ffe3e7;
+}
+
+/* 登入畫面實單確認勾選 */
+.loginAck {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--down) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--down) 45%, transparent);
+  border-radius: 6px;
+  color: var(--text);
+  display: flex;
+  font-size: 12px;
+  gap: 7px;
+  line-height: 1.5;
+  padding: 8px 10px;
+}
+
+.loginAck input {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.loginAck span {
+  flex: 1;
+  min-width: 0;
+}
+
+.loginAck b {
+  color: var(--down);
+}
+
+.symbolSearch {
+  position: relative;
+}
+
+.symbolName {
+  color: var(--accent);
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.symbolSuggest {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  display: grid;
+  left: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 30;
+}
+
+.symbolSuggest button {
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+  border-radius: 0;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 52px 1fr auto;
+  justify-items: start;
+  min-height: 28px;
+  padding: 3px 8px;
+  text-align: left;
+}
+
+.symbolSuggest button:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.symbolSuggest b {
+  color: var(--accent);
+}
+
+.symbolSuggest span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.symbolSuggest i {
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.messageRight {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.streamBadge {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  padding: 1px 8px;
+}
+
+.streamBadge.live {
+  background: color-mix(in srgb, var(--up) 18%, transparent);
+  border-color: var(--up);
+  color: var(--up);
+}
+
+.streamBadge.connecting {
+  border-color: var(--tab-active);
+  color: var(--tab-active);
+}
+
+.lightningTitleTools {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.qtyQuick {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.qtyQuick button {
+  font-size: 12px;
+  min-height: 22px;
+  padding: 1px 4px;
+}
+
+.qtyQuick button.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.lightningQuote span.up,
+.lightningQuote b.up {
+  color: var(--up);
+}
+
+.lightningQuote span.down,
+.lightningQuote b.down {
+  color: var(--down);
+}
+
+.orderCell.bestQuote {
+  font-weight: 800;
+  outline: 1px solid #ffffff;
+  outline-offset: -1px;
+}
+
+.ladderRow.armed {
+  background: color-mix(in srgb, var(--tab-active) 35%, transparent);
+}
+
+.ladderRow.armed strong {
+  outline: 2px solid var(--tab-active);
+  outline-offset: -2px;
+}
+
+.spin {
+  animation: spinKeyframes 0.9s linear infinite;
+}
+
+@keyframes spinKeyframes {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1180px) {
+  .appShell {
+    height: auto;
+    overflow: auto;
+  }
+
+  .layoutGrid {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    height: auto;
+  }
+
+  .zone,
+  .zone1,
+  .zone2,
+  .zone3,
+  .zone4,
+  .zone6,
+  .zoneFlash {
+    grid-column: auto;
+    grid-row: auto;
+    min-height: 360px;
+  }
+
+  .zoneFlash {
+    min-height: 560px;
+  }
+
+  .workArea {
+    grid-template-columns: 1fr;
+  }
+
+  .queryPane {
+    border-right: 0;
+  }
+
+  .indexIntradayDemoPage {
+    padding: 8px;
+  }
+
+  .indexQuotePanel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---- 手機端（≤768px）：放大觸控目標、核心字級，修正表格與對話框溢出 ---- */
+@media (max-width: 768px) {
+  /* 觸控目標：可點元素普遍拉到 ≥40px，送單/刪單類更大 */
+  button,
+  select,
+  input {
+    min-height: 40px;
+    font-size: 14px;
+  }
+
+  .iconButton {
+    min-height: 40px;
+    min-width: 40px;
+  }
+
+  /* 下單/刪單關鍵操作目標加大，降低密集階梯誤觸 */
+  .ladderRow button,
+  .cancelCell,
+  .flashBar button,
+  .qtyQuick button {
+    min-height: 38px;
+  }
+
+  /* 密集表格：在自身容器內橫向捲動，不頂破版面；核心數字放大可讀 */
+  .scrollPane {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .denseTable th,
+  .denseTable td {
+    padding: 6px 6px;
+  }
+
+  .tradeTable th,
+  .tradeTable td {
+    height: auto;
+    max-height: none;
+    font-size: 13px;
+    padding: 6px 6px;
+  }
+
+  /* 階梯與五檔核心數字放大 */
+  .ladderRow strong,
+  .ladderRow {
+    font-size: 13px;
+  }
+
+  .ladderHeader {
+    font-size: 12px;
+  }
+
+  /* 報價列字級放大 */
+  .flashQuoteStrip,
+  .lightningQuote {
+    font-size: 13px;
+  }
+
+  /* 對話框：避免在窄螢幕固定寬度溢出 */
+  .confirmDialog,
+  .invConfirmDialog {
+    min-width: 0;
+    width: calc(100vw - 24px);
+    max-width: 460px;
+  }
+
+  /* 欄寬拖曳把手在觸控裝置無意義，隱藏避免誤觸 */
+  .colResizer {
+    display: none;
+  }
+}
+
+/* ---- 小手機（≤480px）：指數面板與報價列改單欄，進一步放大 ---- */
+@media (max-width: 480px) {
+  .indexQuotePanel {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+
+  .messageLine {
+    font-size: 13px;
+  }
+}
+
+/* ---- 登入畫面 ---- */
+.loginScreen {
+  align-items: center;
+  background: var(--bg);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 16px;
+  position: fixed;
+  z-index: 60;
+}
+
+.loginCard {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: calc(100vh - 32px);
+  max-width: 460px;
+  overflow-y: auto;
+  padding: 22px;
+  width: 100%;
+}
+
+.loginBrand {
+  align-items: center;
+  color: var(--accent);
+  display: flex;
+  gap: 10px;
+}
+
+.loginBrand strong {
+  color: var(--text);
+  display: block;
+  font-size: 18px;
+}
+
+.loginBrand span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.loginEnvGrid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.loginEnvOption {
+  align-items: flex-start;
+  background: var(--button-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 66px;
+  padding: 10px;
+  text-align: left;
+}
+
+.loginEnvOption strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.loginEnvOption span {
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.3;
+}
+
+.loginEnvOption.active {
+  border-color: var(--accent);
+  outline: 1px solid var(--accent);
+}
+
+.loginEnvOption.live.active {
+  border-color: var(--down);
+  outline-color: var(--down);
+}
+
+/* 固定最小高度，切換環境（欄位數不同）時整張卡與視窗不會上下跳動 */
+.loginBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 430px;
+}
+
+.loginFields {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.loginFields label,
+.loginField {
+  color: var(--muted);
+  display: grid;
+  font-size: 12px;
+  gap: 3px;
+}
+
+.loginRemember {
+  align-items: center;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex !important;
+  font-size: 11px;
+  gap: 5px;
+  margin-top: 1px;
+}
+
+.loginRemember input {
+  flex-shrink: 0;
+}
+
+.loginInputWrap {
+  align-items: center;
+  display: flex;
+  position: relative;
+}
+
+.loginInputWrap input {
+  min-height: 34px;
+  padding-right: 30px;
+  width: 100%;
+}
+
+.loginEye {
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--muted);
+  min-height: 26px;
+  min-width: 26px;
+  padding: 0;
+  position: absolute;
+  right: 2px;
+}
+
+.loginEye:hover {
+  color: var(--text);
+}
+
+.loginCertRow {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.loginBrowse {
+  min-height: 34px;
+  white-space: nowrap;
+}
+
+.loginCertName {
+  color: var(--muted);
+  flex: 1;
+  font-size: 11.5px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loginWarn.hidden {
+  visibility: hidden;
+}
+
+.loginLabelRow {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.loginExtLink {
+  align-items: center;
+  color: var(--accent);
+  display: inline-flex;
+  font-size: 11px;
+  gap: 3px;
+  text-decoration: none;
+}
+
+.loginExtLink:hover {
+  text-decoration: underline;
+}
+
+.loginNote {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.loginWarn {
+  color: var(--down);
+  font-size: 12.5px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.loginError {
+  color: var(--danger);
+  font-size: 12.5px;
+  margin: 0;
+}
+
+.loginSubmit {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+  min-height: 44px;
+}
+
+@media (max-width: 520px) {
+  .loginEnvGrid {
+    grid-template-columns: 1fr;
+  }
+}

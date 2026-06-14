@@ -1,0 +1,30 @@
+.env
+.env.local
+# 憑證與金鑰：切勿提交
+*.pfx
+*.p12
+*.key
+*.pem
+# 日誌（含敏感欄位，如 shioaji.log 含個資）
+*.log
+shioaji.log
+.venv/
+.dotnet/
+.dotnet-install.sh
+__pycache__/
+*.pyc
+logs/
+data/
+frontend/node_modules/
+frontend/dist/
+
+# 登入記住的憑證（含明文祕密，切勿提交）
+data/credentials.json
+
+# 元大/永豐 專有 SDK：受券商授權，不可公開散佈（違反授權/著作權）。
+# 開源時請從 repo 排除，並請使用者自行向券商下載放回此處（見 README）。
+# 萬用字串涵蓋各平台建置（osx-arm64 / osx-x64 / win-x64 等）。
+YuantaSparkAPI_*/
+
+# macOS / 編輯器雜項
+.DS_Store
