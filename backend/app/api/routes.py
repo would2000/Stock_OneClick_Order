@@ -506,14 +506,19 @@ def debug_raw_trades() -> list[str]:
 
 
 @router.get("/orders/working", response_model=list[WorkingOrder])
-def working_orders() -> list[WorkingOrder]:
+def working_orders(status: str = "unfilled") -> list[WorkingOrder]:
+    """今日委託查詢。status：unfilled=未完全成交(預設)、filled=已成交、all=全部委託。"""
     try:
-        rows = get_active_client().get_stock_orders()
+        rows = [row for row in get_active_client().get_stock_orders() if row.order_no]
     except YuantaClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    # Working = order accepted (status 20) with unfilled remainder.
-    # AfterQty is the current order size and OkQty the filled size, so a
-    # fully-filled order has AfterQty == OkQty and must not appear here.
+    if status == "all":
+        return rows
+    if status == "filled":
+        # 已完全成交：成交量 > 0 且無剩餘。
+        return [row for row in rows if row.ok_qty > 0 and row.after_qty - row.ok_qty == 0]
+    # 預設 unfilled：已委託(狀態 20)且尚有未成交剩餘（保留原本行為）。
+    # AfterQty 為委託量、OkQty 為成交量，完全成交者不應出現在此。
     return [row for row in rows if row.status == "20" and row.after_qty - row.ok_qty > 0]
 
 

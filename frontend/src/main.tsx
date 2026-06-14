@@ -55,6 +55,7 @@ import { JumboChartPage } from "./pages/JumboChartPage";
 
 type ThemeName = "light" | "dark" | "warm" | "cool";
 type MainTab = "orders" | "trades" | "mit" | "inventory";
+type OrderFilter = "all" | "unfilled" | "filled";
 type PortfolioTab = "live" | "watchlist";
 type WatchItem = { symbol: string; name: string; cost: number; lots: number; shares: number };
 type IndexIntradayModel = { points: IndexIntradayPoint[]; quote: IndexIntradayQuote };
@@ -479,6 +480,9 @@ function App({ theme, setTheme, onLogout }: AppProps) {
   const [confirmBeforeSend, setConfirmBeforeSend] = useState(true);
   const [mitOrders, setMitOrders] = useState<MitOrderRecord[]>([]);
   const [workingOrders, setWorkingOrders] = useState<WorkingOrder[]>([]);
+  // 委託查詢表的篩選與資料（與 workingOrders 分開，避免影響閃電面板/統計）。
+  const [orderFilter, setOrderFilter] = useState<OrderFilter>("unfilled");
+  const [orderReport, setOrderReport] = useState<WorkingOrder[]>([]);
   const [trades, setTrades] = useState<TradeRecord2[]>([]);
   const [invSelected, setInvSelected] = useState<Set<string>>(new Set());
   const [invLots, setInvLots] = useState<Record<string, number>>({});
@@ -693,6 +697,16 @@ function App({ theme, setTheme, onLogout }: AppProps) {
     });
     return { buyOrder, buyMit, sellOrder, sellMit };
   }, [workingOrders, mitOrders, selectedSymbol]);
+  // 委託查詢表要顯示的資料：依下拉選單篩選（未完全成交沿用 workingOrders）。
+  const displayedOrders = useMemo(() => {
+    if (orderFilter === "filled") {
+      return orderReport.filter((o) => o.ok_qty > 0 && o.after_qty - o.ok_qty === 0);
+    }
+    if (orderFilter === "all") {
+      return orderReport;
+    }
+    return workingOrders;
+  }, [orderFilter, orderReport, workingOrders]);
   const latestTick = ticks[ticks.length - 1];
   const tseIndexDisplay = useMemo(
     () => mergeIndexLiveQuote(tseIndex, quoteBySymbol.get("IX0001")),
@@ -855,6 +869,18 @@ function App({ theme, setTheme, onLogout }: AppProps) {
     }
   }
 
+  // 委託查詢表用：未完全成交時直接沿用 workingOrders；其餘抓「全部委託」再前端篩選。
+  async function refreshOrderReport(filter: OrderFilter = orderFilter) {
+    if (filter === "unfilled" || !yuantaStatus?.connected) {
+      return;
+    }
+    try {
+      setOrderReport(await getWorkingOrders("all"));
+    } catch {
+      // 靜默：暫時失敗時保留上次清單。
+    }
+  }
+
   async function refreshTrades() {
     if (!yuantaStatus?.connected) {
       return;
@@ -908,12 +934,6 @@ function App({ theme, setTheme, onLogout }: AppProps) {
       return quote?.down_limit && quote.down_limit > 0 ? quote.down_limit : 0;
     }
     return quote?.deal_price && quote.deal_price > 0 ? quote.deal_price : 0;
-  }
-
-  function toggleInvSelectAll() {
-    setInvSelected((current) =>
-      current.size === positions.length ? new Set() : new Set(positions.map((item) => item.symbol))
-    );
   }
 
   async function sendInventoryOrders() {
@@ -1507,10 +1527,22 @@ function App({ theme, setTheme, onLogout }: AppProps) {
               <div className="filterBar">
                 <select><option>全部帳號</option></select>
                 <select><option>全部交易</option></select>
-                <select><option>未完全成交委託</option></select>
+                <select
+                  value={orderFilter}
+                  onChange={(event) => {
+                    const next = event.target.value as OrderFilter;
+                    setOrderFilter(next);
+                    void refreshOrderReport(next);
+                  }}
+                >
+                  <option value="all">全部委託</option>
+                  <option value="unfilled">未完全成交委託</option>
+                  <option value="filled">已成交委託</option>
+                </select>
                 <button
                   onClick={() => {
                     void refreshWorkingOrders();
+                    void refreshOrderReport();
                     void refreshTrades();
                     void refreshPositions();
                   }}
@@ -1531,7 +1563,7 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {workingOrders.map((item) => (
+                      {displayedOrders.map((item) => (
                         <tr key={item.order_no} onClick={() => selectForChart(item.symbol)}>
                           <td>
                             <button
@@ -1553,11 +1585,19 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                           <td>{numberText(item.after_qty / 1000, 0)}</td>
                           <td>{numberText(item.ok_qty / 1000, 0)}</td>
                           <td>{numberText((item.after_qty - item.ok_qty) / 1000, 0)}</td>
-                          <td>{item.status === "20" ? "委託中" : item.status}</td>
+                          <td>
+                            {item.ok_qty > 0 && item.after_qty - item.ok_qty === 0
+                              ? "已成交"
+                              : item.ok_qty > 0
+                                ? "部分成交"
+                                : item.status === "20"
+                                  ? "委託中"
+                                  : item.status}
+                          </td>
                         </tr>
                       ))}
-                      {workingOrders.length === 0 ? (
-                        <tr><td colSpan={9}>{yuantaStatus?.connected ? "今日無有效委託。" : "請先連線券商後按「查詢」。"}</td></tr>
+                      {displayedOrders.length === 0 ? (
+                        <tr><td colSpan={9}>{yuantaStatus?.connected ? "今日無符合條件的委託。" : "請先連線券商後按「查詢」。"}</td></tr>
                       ) : null}
                     </tbody>
                   </table>
@@ -1639,15 +1679,19 @@ function App({ theme, setTheme, onLogout }: AppProps) {
               ) : null}
               {mainTab === "inventory" ? (
                 <div className="scrollPane">
-                  <div className="watchToolbar">
-                    <label className="check">
-                      <input
-                        type="checkbox"
-                        checked={positions.length > 0 && invSelected.size === positions.length}
-                        onChange={toggleInvSelectAll}
-                      />
+                  <div className="watchToolbar invToolbar">
+                    <button
+                      disabled={busy || positions.length === 0 || invSelected.size === positions.length}
+                      onClick={() => setInvSelected(new Set(positions.map((item) => item.symbol)))}
+                    >
                       全部選擇
-                    </label>
+                    </button>
+                    <button
+                      disabled={busy || invSelected.size === 0}
+                      onClick={() => setInvSelected(new Set())}
+                    >
+                      全部取消
+                    </button>
                     <button
                       className="primary"
                       disabled={busy || invSelected.size === 0}

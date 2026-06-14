@@ -163,8 +163,9 @@ export function getOrderTrades() {
   return request<TradeRecord2[]>("/api/orders/trades");
 }
 
-export function getWorkingOrders() {
-  return request<WorkingOrder[]>("/api/orders/working");
+export function getWorkingOrders(status?: "all" | "unfilled" | "filled") {
+  const qs = status && status !== "unfilled" ? `?status=${status}` : "";
+  return request<WorkingOrder[]>(`/api/orders/working${qs}`);
 }
 
 export function cancelWorkingOrder(payload: {

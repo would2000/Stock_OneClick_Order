@@ -245,12 +245,9 @@ class MockBrokerClient:
     def get_stock_orders(self) -> list:
         from ..trading.schemas import WorkingOrder  # noqa: PLC0415
 
+        # 回傳今日全部委託（含已成交）；未成交/已成交的篩選交由 route 的 status 參數處理。
         with self._lock:
-            return [
-                WorkingOrder(**row)
-                for row in self._orders.values()
-                if row["after_qty"] - row["ok_qty"] > 0
-            ]
+            return [WorkingOrder(**row) for row in self._orders.values()]
 
     def get_stock_trades(self) -> list:
         from ..trading.schemas import TradeRecord  # noqa: PLC0415

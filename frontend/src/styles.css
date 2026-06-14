@@ -984,6 +984,12 @@ dd {
   padding: 4px;
 }
 
+/* 庫存下單工具列：全部選擇 / 全部取消 / 全部送出 三顆等寬等高。 */
+.invToolbar button {
+  flex: 1;
+  white-space: nowrap;
+}
+
 .watchlistBar {
   align-items: center;
   flex-wrap: wrap;
