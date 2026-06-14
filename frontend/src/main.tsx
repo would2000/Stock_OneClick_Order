@@ -1617,6 +1617,13 @@ function App({ theme, setTheme, onLogout }: AppProps) {
         </div>
       </header>
 
+      {isSimEnv && brokerInfo?.fugle_enabled === false ? (
+        <div className="simSynthBanner">
+          ⚠️ 模擬環境未設定富果 API Key：報價以<b>合成方式</b>呈現（價格固定為基準價、無走勢圖／五檔／逐筆，限價單不會成交）。
+          要真實行情請於登入畫面填入富果 API Key，或在 .env 設定 FUGLE_API_KEY。
+        </div>
+      ) : null}
+
       <section className="messageLine">
         <span>{message}</span>
         <span className="messageRight">

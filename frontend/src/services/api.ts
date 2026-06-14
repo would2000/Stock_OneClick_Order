@@ -40,6 +40,7 @@ export type BrokerInfo = {
   active: string;
   available: { id: string; label: string }[];
   status: YuantaStatus;
+  fugle_enabled?: boolean;
 };
 
 export function getBrokerInfo() {

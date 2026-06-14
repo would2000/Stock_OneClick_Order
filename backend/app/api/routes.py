@@ -180,6 +180,8 @@ def broker_info() -> dict[str, Any]:
         "active": get_active_broker(),
         "available": [{"id": item, "label": BROKER_LABELS[item]} for item in AVAILABLE_BROKERS],
         "status": get_active_client().status().model_dump(),
+        # 是否有富果金鑰：模擬環境用來提醒「無金鑰時報價為合成」。
+        "fugle_enabled": bool((get_settings().fugle_api_key or "").strip()),
     }
 
 

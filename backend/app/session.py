@@ -29,6 +29,9 @@ _state: LoginState = LoginState(logged_in=False)
 
 # 券商 SDK 的英文登入錯誤 → 中文（元大與永豐共用，依序比對，取第一個命中）。
 _ERROR_RULES: list[tuple[str, str]] = [
+    # 帳密/憑證未設定（須排在 password/account/api_key 等子字串規則前面，避免被誤判）。
+    ("missing yuanta configuration", "尚未設定元大帳號/密碼/憑證，請於 .env 設定 YUANTA_ACCOUNT / PASSWORD / CERT_PATH / CERT_PASSWORD。"),
+    ("missing shioaji", "尚未設定永豐 API Key / Secret Key，請於 .env 設定 SHIOAJI_API_KEY / SECRET_KEY。"),
     ("api_key must be at least", "API Key 長度不足，請確認是否完整貼上正確的 API Key。"),
     ("secret_key must be at least", "Secret Key 長度不足，請確認是否完整貼上正確的 Secret Key。"),
     ("api_key", "API Key 不正確或格式有誤，請確認後重試。"),
@@ -52,7 +55,7 @@ _ERROR_RULES: list[tuple[str, str]] = [
     ("missing .dotnet", "缺少 .NET 執行環境，請依 README 安裝後再試。"),
     ("yuanta_env must be", "環境設定錯誤（YUANTA_ENV 必須為 UAT 或 PROD）。"),
     ("missing shioaji_api_key", "尚未設定永豐 API Key / Secret Key。"),
-    ("missing .env", "尚未設定帳號/憑證，請於登入畫面填寫或於 .env 設定。"),
+    ("missing .env", "尚未設定帳號/憑證，請於 .env 設定。"),
 ]
 
 
