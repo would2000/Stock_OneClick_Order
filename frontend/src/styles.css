@@ -860,7 +860,8 @@ label {
   border: 1px solid var(--border);
   border-radius: 4px;
   font-size: 12px;
-  max-height: 72px;
+  /* 固定高度，內容多時以捲軸檢視，避免訊息長短造成版面跳動。 */
+  height: 72px;
   overflow: auto;
   padding: 6px;
 }
@@ -911,6 +912,7 @@ dd {
 .sendResult {
   display: grid;
   gap: 4px;
+  align-content: start;
 }
 
 .denseTable {
