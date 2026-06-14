@@ -63,6 +63,74 @@ def resolve_sdk_dir(root: Path) -> Path:
     return root / preferred
 
 
+def _read_int_attr(obj: Any, names: tuple[str, ...]) -> int | None:
+    """從 .NET 物件取第一個存在且可轉 int 的屬性（不分大小寫）。
+
+    元大的日期/時間欄位是自訂結構（TYuantaDate / TYuantaTime），直接 str() 只會拿到
+    型別名，必須改取子屬性（Year/Month/Day、Hour/Minute/Second）。
+    """
+    if obj is None:
+        return None
+    available = {a.lower(): a for a in dir(obj) if not a.startswith("_")}
+    for name in names:
+        attr = available.get(name.lower())
+        if attr is None:
+            continue
+        try:
+            return int(getattr(obj, attr))
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _format_yuanta_stamp(date_obj: Any, time_obj: Any) -> str:
+    """把元大委託回報的 AcceptDate/AcceptTime 轉成 'YYYY-MM-DD HH:MM:SS'。
+
+    - 結構型（TYuantaDate/TYuantaTime）：取 Year/Month/Day、Hour/Minute/Second 子屬性。
+    - 純值型（部分環境直接回字串/數字）：直接採用。
+    - 取不到就回空字串——絕不把 .NET 型別名（YuantaOneAPI.TYuantaXxx）顯示給使用者。
+    """
+
+    def _plain(value: Any) -> str | None:
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return str(value)
+        if isinstance(value, str):
+            text = value.strip()
+            if text and "YuantaOneAPI" not in text:
+                return text
+        return None
+
+    plain_date, plain_time = _plain(date_obj), _plain(time_obj)
+    if plain_date or plain_time:
+        return f"{plain_date or ''} {plain_time or ''}".strip()
+
+    # 候選名涵蓋元大兩種命名慣例：直觀名（Year/Hour…）與 byte 前綴名
+    # （bytHour/bytMin/bytSec，已由 _tick_time_text 的 TimeStamp 結構證實存在）。
+    year = _read_int_attr(date_obj, ("Year", "yyyy", "sYear", "bytYear"))
+    month = _read_int_attr(date_obj, ("Month", "mm", "bytMonth"))
+    day = _read_int_attr(date_obj, ("Day", "dd", "bytDay"))
+    hour = _read_int_attr(time_obj, ("Hour", "hh", "bytHour"))
+    minute = _read_int_attr(time_obj, ("Minute", "min", "bytMin", "bytMinute"))
+    second = _read_int_attr(time_obj, ("Second", "sec", "ss", "bytSec", "bytSecond"))
+
+    if year is not None and 0 < year < 1911:  # 萬一回的是民國年，補成西元年。
+        year += 1911
+
+    date_part = (
+        f"{year:04d}-{month:02d}-{day:02d}"
+        if None not in (year, month, day)
+        else ""
+    )
+    time_part = (
+        f"{hour:02d}:{minute:02d}:{second:02d}"
+        if None not in (hour, minute, second)
+        else ""
+    )
+    return f"{date_part} {time_part}".strip()
+
+
 class YuantaClientError(RuntimeError):
     pass
 
@@ -948,13 +1016,9 @@ class YuantaClient:
                 # 元大委託回報以 CancelFlag 標示取消（值格式因環境而異，採保守判斷）。
                 cancel_flag = str(getattr(item, "CancelFlag", "") or "").strip().upper()
                 cancelled = cancel_flag not in ("", "0", "N", "FALSE", "NULL")
-                accept_time = " ".join(
-                    part
-                    for part in (
-                        str(getattr(item, "AcceptDate", "") or "").strip(),
-                        str(getattr(item, "AcceptTime", "") or "").strip(),
-                    )
-                    if part
+                accept_time = _format_yuanta_stamp(
+                    getattr(item, "AcceptDate", None),
+                    getattr(item, "AcceptTime", None),
                 )
                 rows.append(
                     WorkingOrder(
@@ -983,11 +1047,10 @@ class YuantaClient:
         rows: list[TradeRecord] = []
         for item in payload.StkTradeList:
             try:
+                # DateTime 是合併結構（同時含 Year/Month/Day 與 Hour/Minute/Second），
+                # 故同一物件同時當日期與時間來源傳入。
                 stamp = item.DateTime
-                time_text = (
-                    f"{int(stamp.Year):04d}-{int(stamp.Month):02d}-{int(stamp.Day):02d} "
-                    f"{int(stamp.Hour):02d}:{int(stamp.Minute):02d}:{int(stamp.Second):02d}"
-                )
+                time_text = _format_yuanta_stamp(stamp, stamp)
                 deal_price = float(getattr(item, "SPrice", 0) or 0) or float(getattr(item, "OPrice", 0) or 0)
                 rows.append(
                     TradeRecord(
