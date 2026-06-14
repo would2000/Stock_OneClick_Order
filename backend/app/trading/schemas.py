@@ -5,8 +5,7 @@ class HealthResponse(BaseModel):
     status: str
     yuanta_env: str
     orders_enabled: bool
-    database_path: str
-    market_data_root: str
+    # 不再回傳 database_path / market_data_root：避免未授權者取得本機路徑與 email（資訊揭露）。
 
 
 class YuantaStatus(BaseModel):

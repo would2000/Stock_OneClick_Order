@@ -166,8 +166,6 @@ def health() -> HealthResponse:
         status="ok",
         yuanta_env=settings.yuanta_env,
         orders_enabled=settings.yuanta_enable_order,
-        database_path=str(settings.database_path),
-        market_data_root=settings.market_data_root,
     )
 
 
@@ -176,7 +174,7 @@ def today_candidates() -> list[Candidate]:
     return get_today_candidates()
 
 
-@router.get("/broker")
+@router.get("/broker", dependencies=[Depends(require_api_key)])
 def broker_info() -> dict[str, Any]:
     return {
         "active": get_active_broker(),
@@ -309,7 +307,7 @@ def symbols_search(q: str = Query(..., min_length=1), limit: int = Query(default
     return hits[:limit]
 
 
-@router.get("/yuanta/status", response_model=YuantaStatus)
+@router.get("/yuanta/status", response_model=YuantaStatus, dependencies=[Depends(require_api_key)])
 def yuanta_status() -> YuantaStatus:
     return get_active_client().status()
 
@@ -342,7 +340,7 @@ def quotes(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
-@router.get("/positions", response_model=list[Position])
+@router.get("/positions", response_model=list[Position], dependencies=[Depends(require_api_key)])
 def positions() -> list[Position]:
     try:
         return get_active_client().get_positions()
@@ -439,11 +437,26 @@ def order_preview(order: OrderRequest) -> OrderPreview:
     return preview
 
 
+# 下單節流：滑動視窗每 2 秒最多 N 筆，擋失控迴圈/重送洪水（對正常手動下單寬鬆無感）。
+_ORDER_RATE_WINDOW = 2.0
+_ORDER_RATE_MAX = 20
+_recent_order_times: list[float] = []
+
+
 @router.post("/orders/send", response_model=OrderResult, dependencies=[Depends(require_api_key)])
 def send_order(order: OrderRequest) -> OrderResult:
     if not get_login_state().logged_in:
         raise HTTPException(status_code=401, detail="尚未登入，無法下單。")
-    # 模擬沙盒：無任何安控、可隨意下單，跳過風控預覽。
+    now = time_module.monotonic()
+    _recent_order_times[:] = [t for t in _recent_order_times if now - t < _ORDER_RATE_WINDOW]
+    if len(_recent_order_times) >= _ORDER_RATE_MAX:
+        return OrderResult(accepted=False, mode="blocked", message="下單頻率過高，已暫時擋下，請稍候再試。")
+    _recent_order_times.append(now)
+    # 風控停損（kill switch）：對「所有環境含模擬」一律擋下，避免「以為已停損、實際仍成交」。
+    if is_kill_switch_enabled():
+        audit_order(order, "blocked", "blocked", "風控停損啟用中，已擋下委託。")
+        return OrderResult(accepted=False, mode="blocked", message="風控停損啟用中，已擋下委託。")
+    # 模擬沙盒：無其他安控、可隨意下單，跳過風控預覽（但停損仍生效，見上）。
     if not is_sim_session():
         # 市價單需即時參考價估算金額（讓金額上限對市價單也生效）。
         reference_price: float | None = None
@@ -505,7 +518,7 @@ def debug_raw_trades() -> list[str]:
     return out
 
 
-@router.get("/orders/working", response_model=list[WorkingOrder])
+@router.get("/orders/working", response_model=list[WorkingOrder], dependencies=[Depends(require_api_key)])
 def working_orders(status: str = "unfilled") -> list[WorkingOrder]:
     """今日委託查詢。status：all=全部委託(含已成交/取消)、unfilled=未結案委託(預設,供閃電面板)。
 
@@ -525,7 +538,7 @@ def working_orders(status: str = "unfilled") -> list[WorkingOrder]:
     ]
 
 
-@router.get("/orders/trades", response_model=list[TradeRecord])
+@router.get("/orders/trades", response_model=list[TradeRecord], dependencies=[Depends(require_api_key)])
 def order_trades() -> list[TradeRecord]:
     try:
         return get_active_client().get_stock_trades()
@@ -555,7 +568,7 @@ def cancel_order(request: CancelOrderRequest) -> OrderResult:
     return result
 
 
-@router.get("/mit-orders", response_model=list[MitOrderRecord])
+@router.get("/mit-orders", response_model=list[MitOrderRecord], dependencies=[Depends(require_api_key)])
 def mit_orders() -> list[MitOrderRecord]:
     clear_stale_mit_orders()  # 換日清掉非今日的 MIT
     records = list_mit_orders()
@@ -593,7 +606,7 @@ def kill_switch(request: KillSwitchRequest) -> KillSwitchResponse:
     return set_kill_switch(request.enabled)
 
 
-@router.get("/risk/kill-switch", response_model=KillSwitchResponse)
+@router.get("/risk/kill-switch", response_model=KillSwitchResponse, dependencies=[Depends(require_api_key)])
 def kill_switch_status() -> KillSwitchResponse:
     enabled = is_kill_switch_enabled()
     return KillSwitchResponse(

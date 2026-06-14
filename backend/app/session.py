@@ -5,10 +5,24 @@
   連線成功後開啟下單總開關（仍保有送單前確認等實單保護）。
 """
 
+from pathlib import Path
+
 from .broker import BROKER_LABELS, get_active_client, is_sim_session, set_active_broker
 from .config import get_settings
 from .trading.schemas import LoginRequest, LoginState
 from .yuanta.client import YuantaClientError, get_yuanta_client
+
+
+def _validate_cert_path(cert_path: str) -> str:
+    """登入請求帶的憑證路徑只允許落在受控上傳目錄（data/runtime_certs）內，
+    防止用任意絕對路徑讓 openssl/SDK 探測本機檔案（資訊預言機）。留白則沿用 .env 設定。"""
+    if not cert_path:
+        return ""
+    allowed_root = (get_settings().data_dir / "runtime_certs").resolve()
+    resolved = Path(cert_path).resolve()
+    if resolved == allowed_root or allowed_root in resolved.parents:
+        return str(resolved)
+    raise YuantaClientError("憑證路徑不在允許範圍，請改用「憑證上傳」功能選擇憑證。")
 
 _state: LoginState = LoginState(logged_in=False)
 
@@ -200,6 +214,8 @@ def login(req: LoginRequest) -> LoginState:
     _reset_runtime_flags()
     # 富果金鑰（選填，各環境通用）：讓模擬沙盒也能用真實行情。
     _apply_fugle_key(req, settings)
+    # 憑證路徑白名單檢查（不合法直接擋下登入）。
+    cert_path = _validate_cert_path(req.cert_path)
 
     if req.environment == "sim":
         # 沙盒改為持久化模擬帳戶：登入時不再清空，委託/成交/部位保留在 trading.db。
@@ -207,16 +223,16 @@ def login(req: LoginRequest) -> LoginState:
         status = get_active_client().connect()
     elif req.environment == "yuanta":
         _apply_credentials("yuanta", req, settings)
-        if req.cert_path:
-            settings.yuanta_cert_path = req.cert_path
+        if cert_path:
+            settings.yuanta_cert_path = cert_path
         settings.yuanta_env = "PROD"
         settings.yuanta_enable_order = True
         set_active_broker("yuanta")
         status = get_active_client().connect()
     elif req.environment == "sinopac":
         _apply_credentials("sinopac", req, settings)
-        if req.cert_path:
-            settings.shioaji_ca_path = req.cert_path
+        if cert_path:
+            settings.shioaji_ca_path = cert_path
         settings.shioaji_simulation = False
         settings.yuanta_enable_order = True  # 兩家共用的實單總開關
         set_active_broker("sinopac")

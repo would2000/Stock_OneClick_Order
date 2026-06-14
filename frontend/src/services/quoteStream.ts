@@ -13,6 +13,9 @@ type Options = {
   onError?: (message: string) => void;
 };
 
+// 報價 WebSocket 也要認證：金鑰以 subprotocol 夾帶（避免寫進 URL 被 log），須與後端 API_KEY 相同。
+const API_KEY = (import.meta.env.VITE_API_KEY as string | undefined) ?? "";
+
 function streamUrl() {
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
   return `${protocol}://${window.location.host}/api/ws/quotes`;
@@ -47,7 +50,7 @@ export function useQuoteStream({ enabled, symbols, tickSymbol = "", onQuotes, on
         return;
       }
       setStatus("connecting");
-      const socket = new WebSocket(streamUrl());
+      const socket = new WebSocket(streamUrl(), API_KEY ? [API_KEY] : undefined);
       socketRef.current = socket;
 
       socket.onopen = () => {

@@ -7,11 +7,13 @@ so N browser tabs cost one SDK round-trip per tick instead of N.
 
 import asyncio
 import os
+import secrets
 import time
 from datetime import datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from ..config import get_settings
 from ..trading.schemas import QuoteResponse
 from ..broker import get_active_client
 from ..yuanta.client import YuantaClientError
@@ -78,8 +80,8 @@ class QuoteBroadcaster:
         # a dead symbol can't recreate the after-hours SDK polling jam.
         self._after_hours_seeded: set[str] = set()
 
-    async def register(self, websocket: WebSocket) -> None:
-        await websocket.accept()
+    async def register(self, websocket: WebSocket, subprotocol: str | None = None) -> None:
+        await websocket.accept(subprotocol=subprotocol)
         async with self._lock:
             self._clients[websocket] = set()
             if self._task is None or self._task.done():
@@ -221,7 +223,14 @@ broadcaster = QuoteBroadcaster()
 
 @stream_router.websocket("/api/ws/quotes")
 async def quotes_websocket(websocket: WebSocket) -> None:
-    await broadcaster.register(websocket)
+    # 認證：金鑰以 WebSocket subprotocol 夾帶（避免寫進 URL 被 log）。未通過則拒絕握手。
+    expected = get_settings().api_key
+    offered = websocket.scope.get("subprotocols") or []
+    provided = offered[0] if offered else ""
+    if not expected or not provided or not secrets.compare_digest(provided, expected):
+        await websocket.close(code=1008)  # policy violation
+        return
+    await broadcaster.register(websocket, subprotocol=provided)
     try:
         while True:
             message = await websocket.receive_json()

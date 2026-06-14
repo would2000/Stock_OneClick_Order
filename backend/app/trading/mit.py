@@ -165,7 +165,8 @@ async def run_mit_engine() -> None:
             pending = await asyncio.to_thread(list_pending_mit_orders)
             client = get_active_client()
             sim = is_sim_session()
-            if pending and client.status().connected and (sim or (not is_kill_switch_enabled() and in_market_hours())):
+            # 風控停損對所有環境(含模擬)一律生效;模擬仍可不限盤中時間,但停損啟用時不觸發。
+            if pending and client.status().connected and not is_kill_switch_enabled() and (sim or in_market_hours()):
                 symbols = sorted({order.symbol for order in pending})
                 rows = await asyncio.to_thread(get_quotes_prefer_live, symbols)
                 quotes_by_symbol = {row.symbol: row for row in rows}

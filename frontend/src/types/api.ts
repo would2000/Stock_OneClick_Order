@@ -2,8 +2,6 @@ export type HealthResponse = {
   status: string;
   yuanta_env: string;
   orders_enabled: boolean;
-  database_path: string;
-  market_data_root: string;
 };
 
 export type YuantaStatus = {
