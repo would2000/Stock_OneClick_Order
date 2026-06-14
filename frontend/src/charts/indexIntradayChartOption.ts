@@ -300,6 +300,19 @@ function buildPriceSeries(
     });
   }
 
+  // 均價線末端標上目前均價數值，直接顯示在走勢圖上（個股／指數通用）。
+  const avgMarkPointData: MarkPointItem[] = [];
+  if (lastIdx >= 0 && typeof quote.avgPrice === "number" && quote.avgPrice > 0) {
+    const avgVal = Math.round(quote.avgPrice * 100) / 100;
+    avgMarkPointData.push({
+      name: "均價",
+      coord: [times[lastIdx], avgVal],
+      value: avgVal,
+      itemStyle: { color: colors.muted },
+      label: { show: true, position: "right", color: colors.muted, fontSize: 11, fontWeight: 700, formatter: `均{c}` }
+    });
+  }
+
   return [
     {
       name: "成交",
@@ -332,7 +345,13 @@ function buildPriceSeries(
       data: avg,
       lineStyle: { color: colors.muted, width: 1.35 },
       itemStyle: { color: colors.muted },
-      z: 3
+      z: 3,
+      markPoint: {
+        symbol: "circle",
+        symbolSize: 6,
+        silent: true,
+        data: avgMarkPointData
+      }
     }
   ];
 }

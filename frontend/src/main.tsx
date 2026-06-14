@@ -490,6 +490,8 @@ function App({ theme, setTheme, onLogout }: AppProps) {
   const [workingOrders, setWorkingOrders] = useState<WorkingOrder[]>([]);
   // 委託查詢表的篩選與資料（抓「全部委託」後在前端分 4 類；與 workingOrders 分開，避免影響閃電面板/統計）。
   const [orderFilter, setOrderFilter] = useState<OrderFilter>("all");
+  // 委託/MIT/庫存分頁：以代號或名稱篩選「自己已載入的資料」（與閃電下單的市場搜尋不同）。
+  const [tableSearch, setTableSearch] = useState("");
   const [orderReport, setOrderReport] = useState<WorkingOrder[]>([]);
   const [invSelected, setInvSelected] = useState<Set<string>>(new Set());
   const [orderSelected, setOrderSelected] = useState<Set<string>>(new Set()); // 委託查詢勾選（key=order_no）
@@ -739,17 +741,26 @@ function App({ theme, setTheme, onLogout }: AppProps) {
   }, [workingOrders, mitOrders, selectedSymbol]);
   // 委託查詢表要顯示的資料：抓全部委託後，依「成交量 vs 委託量 + 取消旗標」分 4 類。
   const displayedOrders = useMemo(() => {
+    const q = tableSearch.trim().toLowerCase();
     return orderReport.filter((o) => {
+      if (q && !(o.symbol.toLowerCase().includes(q) || (o.name ?? "").toLowerCase().includes(q))) return false;
       if (orderFilter === "none") return !!o.cancelled || o.ok_qty === 0; // 未成交（含取消單）
       if (orderFilter === "partial") return !o.cancelled && o.ok_qty > 0 && o.ok_qty < o.after_qty;
       if (orderFilter === "filled") return !o.cancelled && o.ok_qty > 0 && o.ok_qty >= o.after_qty;
       return true; // all
     });
-  }, [orderFilter, orderReport]);
+  }, [orderFilter, orderReport, tableSearch]);
   // 可刪的委託（未取消且尚有未成交剩餘）／可取消的 MIT（等待中）——只有這些列才顯示勾選框與刪/取消鈕。
   const isOrderCancellable = (o: WorkingOrder) => !o.cancelled && o.after_qty - o.ok_qty > 0;
   const cancellableOrderNos = displayedOrders.filter(isOrderCancellable).map((o) => o.order_no);
-  const pendingMitIds = mitOrders.filter((m) => m.status === "pending").map((m) => m.id);
+  // MIT／庫存分頁套用同一個代號/名稱篩選（過濾已載入資料）。
+  const matchTableSearch = (symbol: string, name?: string) => {
+    const q = tableSearch.trim().toLowerCase();
+    return !q || symbol.toLowerCase().includes(q) || (name ?? "").toLowerCase().includes(q);
+  };
+  const displayedMit = mitOrders.filter((m) => matchTableSearch(m.symbol, nameFor(m.symbol)));
+  const displayedPositions = positions.filter((p) => matchTableSearch(p.symbol, p.name));
+  const pendingMitIds = displayedMit.filter((m) => m.status === "pending").map((m) => m.id);
   const latestTick = ticks[ticks.length - 1];
   const tseIndexDisplay = useMemo(
     () => mergeIndexLiveQuote(tseIndex, quoteBySymbol.get("IX0001")),
@@ -1512,10 +1523,17 @@ function App({ theme, setTheme, onLogout }: AppProps) {
         void refreshQuotes(true);
       }
       void refreshSelectedKline();
-      refreshIndexIntraday(true);
     }, 15000);
     return () => window.clearInterval(timer);
   }, [yuantaStatus?.connected, streamStatus, selectedSymbols.join(",")]);
+
+  // 指數分時為公開行情（後端以 kline 歷史曲線 + sampler 提供），不需券商連線即可顯示。
+  // 改為獨立常駐輪詢：未連線時也看得到指數走勢與均價等數值；連線盤中則由後端 sampler 帶入即時分鐘。
+  useEffect(() => {
+    refreshIndexIntraday(true);
+    const timer = window.setInterval(() => refreshIndexIntraday(true), 15000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!yuantaStatus?.connected) {
@@ -1565,9 +1583,6 @@ function App({ theme, setTheme, onLogout }: AppProps) {
 
   useEffect(() => {
     void refreshSelectedKline();
-    if (yuantaStatus?.connected) {
-      refreshIndexIntraday(true);
-    }
   }, [yuantaStatus?.connected, selectedSymbol]);
 
   // 切換到「委託查詢」分頁時立即載入全部委託，不必等下一次輪詢。
@@ -1655,6 +1670,12 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                   <option value="partial">未完全成交委託</option>
                   <option value="filled">已成交委託</option>
                 </select>
+                <input
+                  className="codeFilter"
+                  value={tableSearch}
+                  placeholder="代號/名稱篩選"
+                  onChange={(event) => setTableSearch(event.target.value)}
+                />
                 <button
                   onClick={() => {
                     void refreshWorkingOrders();
@@ -1791,7 +1812,7 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {mitOrders.map((item) => (
+                    {displayedMit.map((item) => (
                       <tr key={item.id} onClick={() => selectForChart(item.symbol)}>
                         <td className="actionCell">
                           {item.status === "pending" ? (
@@ -1836,8 +1857,8 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                         <td>{item.order_no || "-"}</td>
                       </tr>
                     ))}
-                    {mitOrders.length === 0 ? (
-                      <tr><td colSpan={10}>尚無 MIT 觸價單。於閃電下單點 MIT 建立。</td></tr>
+                    {displayedMit.length === 0 ? (
+                      <tr><td colSpan={10}>{tableSearch.trim() ? "查無符合的 MIT 觸價單。" : "尚無 MIT 觸價單。於閃電下單點 MIT 建立。"}</td></tr>
                     ) : null}
                   </tbody>
                 </table>
@@ -1847,8 +1868,8 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                 <div className="scrollPane">
                   <div className="watchToolbar invToolbar">
                     <button
-                      disabled={busy || positions.length === 0 || invSelected.size === positions.length}
-                      onClick={() => setInvSelected(new Set(positions.map((item) => item.symbol)))}
+                      disabled={busy || displayedPositions.length === 0 || invSelected.size === displayedPositions.length}
+                      onClick={() => setInvSelected(new Set(displayedPositions.map((item) => item.symbol)))}
                     >
                       <CheckSquare size={14} />全部選擇
                     </button>
@@ -1872,7 +1893,7 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                   <table className="denseTable">
                     <thead><tr><th>選取</th><th>代號</th><th>名稱</th><th>庫存(張)</th><th>現價</th><th>送出張數</th><th>市值</th><th>未實現</th></tr></thead>
                     <tbody>
-                      {positions.map((position) => {
+                      {displayedPositions.map((position) => {
                         const quote = quoteBySymbol.get(position.symbol);
                         const livePrice = quote?.deal_price ?? position.market_price;
                         const liveMarketAmount = livePrice ? livePrice * position.quantity : position.market_amount;
@@ -2016,16 +2037,15 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                 return (
                   <div className="flashQuoteStrip">
                     <b className="flashSym" title={orderName || selectedName}>{orderName || selectedName}</b>
-                    <span>成交價</span>
-                    <b className={trendClass}>{numberText(deal)}</b>
-                    <span>漲跌</span>
-                    <b className={trendClass}>
-                      {change === null ? "-" : `${change > 0 ? "▲" : change < 0 ? "▼" : ""}${numberText(Math.abs(change))}`}
-                    </b>
-                    <span>單量</span>
-                    <b>{latestTick ? numberText(latestTick.volume, 0) : "-"}</b>
-                    <span>總量</span>
-                    <b className="volText">{numberText(selectedQuote?.total_volume, 0)}</b>
+                    <span className="qPair"><span>成交價</span><b className={trendClass}>{numberText(deal)}</b></span>
+                    <span className="qPair">
+                      <span>漲跌</span>
+                      <b className={trendClass}>
+                        {change === null ? "-" : `${change > 0 ? "▲" : change < 0 ? "▼" : ""}${numberText(Math.abs(change))}`}
+                      </b>
+                    </span>
+                    <span className="qPair"><span>單量</span><b>{latestTick ? numberText(latestTick.volume, 0) : "-"}</b></span>
+                    <span className="qPair"><span>總量</span><b className="volText">{numberText(selectedQuote?.total_volume, 0)}</b></span>
                   </div>
                 );
               })()}
@@ -2217,9 +2237,9 @@ function App({ theme, setTheme, onLogout }: AppProps) {
             <button type="button" className={indexTab === "OTC" ? "active" : ""} onClick={() => setIndexTab("OTC")}>櫃買指數</button>
           </div>
           {indexTab === "TSE" ? (
-            <IndexIntradayChart points={tseIndexDisplay.points} quote={tseIndexDisplay.quote} height="100%" themeKey={theme} unifiedPriceLine />
+            <IndexIntradayChart points={tseIndexDisplay.points} quote={tseIndexDisplay.quote} height="100%" themeKey={theme} unifiedPriceLine volumeUnit="turnover" />
           ) : (
-            <IndexIntradayChart points={otcIndexDisplay.points} quote={otcIndexDisplay.quote} height="100%" themeKey={theme} unifiedPriceLine />
+            <IndexIntradayChart points={otcIndexDisplay.points} quote={otcIndexDisplay.quote} height="100%" themeKey={theme} unifiedPriceLine volumeUnit="turnover" />
           )}
         </div>
         <div className="zone zone4">

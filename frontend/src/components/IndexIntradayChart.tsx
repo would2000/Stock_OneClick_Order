@@ -22,6 +22,8 @@ type IndexIntradayChartProps = {
   themeKey?: string;
   // 個股走勢線統一黃色（不隨漲跌變紅綠）；指數不傳。
   unifiedPriceLine?: boolean;
+  // 指數的「量」其實是成交值（金額）→ 傳 "turnover" 以「億」顯示；個股維持張/股整數。
+  volumeUnit?: "lots" | "turnover";
 };
 
 // 從目前套用主題的 .appShell 讀 CSS 變數，對應到圖表配色。
@@ -69,6 +71,16 @@ function integerText(value: number | undefined) {
   return value.toLocaleString("zh-TW", { maximumFractionDigits: 0 });
 }
 
+// 指數的「量」其實是全市場成交值（金額，單位元）→ 換算成「億」顯示，避免 12 位數冗長。
+function turnoverText(value: number | undefined) {
+  if (value === undefined || Number.isNaN(value) || value <= 0) {
+    return "-";
+  }
+  const yi = value / 1e8;
+  const digits = yi >= 100 ? 0 : yi >= 10 ? 1 : 2;
+  return `${yi.toLocaleString("zh-TW", { maximumFractionDigits: digits, minimumFractionDigits: 0 })} 億`;
+}
+
 function trendClass(value: number) {
   if (value > 0) {
     return "twUp";
@@ -96,14 +108,16 @@ function QuoteCell({
   );
 }
 
-function QuotePanel({ quote }: { quote: IndexIntradayQuote }) {
+function QuotePanel({ quote, volumeUnit }: { quote: IndexIntradayQuote; volumeUnit?: "lots" | "turnover" }) {
   const changeClass = trendClass(quote.change);
+  // 指數成交值以「億」顯示；個股維持張/股整數。
+  const volText = volumeUnit === "turnover" ? turnoverText : integerText;
 
   return (
     <div className="indexQuotePanel">
       <QuoteCell label="成交" value={numberText(quote.currentPrice)} className={changeClass} />
-      <QuoteCell label="單量" value={integerText(quote.lastVolume)} />
-      <QuoteCell label="總量" value={integerText(quote.volume)} className="twVolume" />
+      <QuoteCell label={volumeUnit === "turnover" ? "單值" : "單量"} value={volText(quote.lastVolume)} />
+      <QuoteCell label={volumeUnit === "turnover" ? "總值" : "總量"} value={volText(quote.volume)} className="twVolume" />
       <QuoteCell label="開盤" value={numberText(quote.openPrice)} className={trendClass(quote.openPrice - quote.prevClose)} />
       <QuoteCell label="最高" value={numberText(quote.highPrice)} className={trendClass(quote.highPrice - quote.prevClose)} />
       <QuoteCell label="最低" value={numberText(quote.lowPrice)} className={trendClass(quote.lowPrice - quote.prevClose)} />
@@ -115,8 +129,8 @@ function QuotePanel({ quote }: { quote: IndexIntradayQuote }) {
       />
       <QuoteCell label="幅度" value={`${numberText(quote.changePercent)}%`} className={changeClass} />
       <QuoteCell label="振幅" value={`${numberText(quote.amplitudePercent)}%`} className="twWarn" />
-      <QuoteCell label="內盤" value={integerText(quote.innerVolume)} className="twDown" />
-      <QuoteCell label="外盤" value={integerText(quote.outerVolume)} className="twUp" />
+      <QuoteCell label="內盤" value={volText(quote.innerVolume)} className="twDown" />
+      <QuoteCell label="外盤" value={volText(quote.outerVolume)} className="twUp" />
     </div>
   );
 }
@@ -195,7 +209,7 @@ function TickList({ ticks, hint }: { ticks: TickRecord[]; hint: string }) {
   );
 }
 
-export function IndexIntradayChart({ points, quote, height = 760, fiveTick, ticks, ticksHint, themeKey, unifiedPriceLine }: IndexIntradayChartProps) {
+export function IndexIntradayChart({ points, quote, height = 760, fiveTick, ticks, ticksHint, themeKey, unifiedPriceLine, volumeUnit }: IndexIntradayChartProps) {
   const [scaleMode, setScaleMode] = useState<IndexIntradayScaleMode>("relative");
   const [footerTab, setFooterTab] = useState<"five" | "stats">("five");
   const [colors, setColors] = useState<IntradayChartColors>(() => readChartColors());
@@ -268,11 +282,11 @@ export function IndexIntradayChart({ points, quote, height = 760, fiveTick, tick
                 <TickList ticks={ticks ?? []} hint={ticksHint ?? "等待成交推播"} />
               </div>
             ) : (
-              <QuotePanel quote={quote} />
+              <QuotePanel quote={quote} volumeUnit={volumeUnit} />
             )}
           </div>
         ) : (
-          <QuotePanel quote={quote} />
+          <QuotePanel quote={quote} volumeUnit={volumeUnit} />
         )
       ) : null}
     </section>

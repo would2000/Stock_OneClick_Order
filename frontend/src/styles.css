@@ -338,8 +338,14 @@ input {
   border-bottom: 1px solid var(--border);
   display: grid;
   gap: 5px;
-  grid-template-columns: 1.2fr 1fr 1.2fr auto auto;
+  grid-template-columns: 1.2fr 1fr 1.2fr 1.2fr auto auto;
   padding: 4px;
+}
+
+/* 委託/MIT/庫存分頁的代號搜尋框：撐滿格位、可縮到 0 不頂破工具列。 */
+.filterBar .codeFilter {
+  min-width: 0;
+  width: 100%;
 }
 
 .orderDock {
@@ -739,10 +745,11 @@ label {
   background: var(--panel);
   border: 1px solid var(--border);
   color: var(--text);
-  display: grid;
+  /* 改用可換行的 flex：視窗變窄時，「標籤＋數值」整組換到下一行，數字不再被裁切。 */
+  display: flex;
+  flex-wrap: wrap;
   font-size: 11px;
-  gap: 4px;
-  grid-template-columns: auto auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 2px 10px;
   min-height: 26px;
   padding: 3px 6px;
 }
@@ -755,11 +762,22 @@ label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding-right: 4px;
+  min-width: 0;
+  max-width: 100%;
+  padding-right: 6px;
+  margin-right: 2px;
   border-right: 1px solid var(--border);
 }
 
-.flashQuoteStrip span {
+/* 每個「標籤＋數值」綁成一組，整組一起換行、組內不被拆開或裁切。 */
+.flashQuoteStrip .qPair {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.flashQuoteStrip .qPair > span {
   color: var(--muted);
 }
 
