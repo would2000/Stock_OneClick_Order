@@ -20,6 +20,8 @@ from ..trading.schemas import (
 
 BASE_PRICE = 100.0
 _SIM_STATE_KEY = "mock"
+# 沙盒部位種類代碼 → 名稱（下單 trade_kind 決定；0=現股、1=融資、2=融券）。
+_KIND_LABELS = {0: "現股", 1: "融資", 2: "融券"}
 
 
 class MockBrokerClient:
@@ -31,7 +33,14 @@ class MockBrokerClient:
         self._positions: dict[str, dict] = {}
         self._seq = 0
         self._trade_date = ""  # 目前交易日（YYYY-MM-DD）；換日時清空委託/成交
+        self._seeded = False  # 是否已植入示範庫存（每個 DB 只植入一次）
         self._load()
+        # 首次啟動且尚無任何部位時，植入現股/融資/融券各一筆示範庫存，方便驗證顯示。
+        if not self._seeded:
+            if not self._positions:
+                self._seed_demo()
+            self._seeded = True
+            self._save()
 
     # ---------- persistence ----------
     def _load(self) -> None:
@@ -54,6 +63,7 @@ class MockBrokerClient:
         self._positions = data.get("positions", {})
         self._seq = int(data.get("seq", 0))
         self._trade_date = data.get("trade_date", "")
+        self._seeded = bool(data.get("seeded", False))
 
     def _save(self) -> None:
         """把目前沙盒狀態整包寫回 trading.db（資料量小，整包覆寫即可）。
@@ -66,6 +76,7 @@ class MockBrokerClient:
                 "positions": self._positions,
                 "seq": self._seq,
                 "trade_date": self._trade_date,
+                "seeded": self._seeded,
             }
         )
         now = datetime.now().isoformat(timespec="seconds")
@@ -240,7 +251,7 @@ class MockBrokerClient:
                         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     }
                 )
-                self._apply_fill(order.symbol, order.side, shares, fill_price)
+                self._apply_fill(order.symbol, order.side, shares, fill_price, order.trade_kind)
             self._save()
         return OrderResult(accepted=True, mode="sim", message="模擬下單成功（沙盒）", order_no=order_no)
 
@@ -254,14 +265,28 @@ class MockBrokerClient:
             self._save()
         return OrderResult(accepted=True, mode="sim", message="模擬刪單成功", order_no=order.order_no)
 
-    def _apply_fill(self, symbol: str, side: str, shares: int, price: float) -> None:
-        pos = self._positions.setdefault(symbol, {"qty": 0, "cost": 0.0})
-        if side == "B":
-            total = pos["cost"] * pos["qty"] + price * shares
-            pos["qty"] += shares
-            pos["cost"] = total / pos["qty"] if pos["qty"] else 0.0
-        else:
-            pos["qty"] = max(0, pos["qty"] - shares)
+    def _apply_fill(self, symbol: str, side: str, shares: int, price: float, kind: int = 0) -> None:
+        # 支援淨多／淨空部位：買為正、賣為負。手上無部位時賣出即建立空單（qty 轉負）。
+        pos = self._positions.setdefault(symbol, {"qty": 0, "cost": 0.0, "kind": kind})
+        signed = shares if side == "B" else -shares
+        old_qty = pos["qty"]
+        new_qty = old_qty + signed
+        if new_qty == 0:
+            # 完全平倉
+            pos["cost"] = 0.0
+        elif old_qty == 0:
+            # 開新倉（多或空）→ 成本為本次成交價，並記錄部位種類（現股/融資/融券）
+            pos["cost"] = price
+            pos["kind"] = kind
+        elif (old_qty > 0) == (signed > 0):
+            # 同方向加碼 → 加權平均成本
+            pos["cost"] = (pos["cost"] * abs(old_qty) + price * abs(signed)) / abs(new_qty)
+        elif (old_qty > 0) != (new_qty > 0):
+            # 反向且穿越零（多翻空／空翻多）→ 視為新部位，更新成本與部位種類
+            pos["cost"] = price
+            pos["kind"] = kind
+        # else: 反向減碼但未穿零 → 成本不變
+        pos["qty"] = new_qty
 
     def _market_price(self, symbol: str) -> float | None:
         """目前即時成交價（富果）；無金鑰／取不到時回 None。"""
@@ -338,7 +363,7 @@ class MockBrokerClient:
             self._match_limit_orders()
             rows = []
             for symbol, pos in self._positions.items():
-                if pos["qty"] <= 0:
+                if pos["qty"] == 0:  # 平倉後不顯示；多單(正)與空單(負)皆保留
                     continue
                 market_price = self._market_price(symbol) or pos["cost"]  # 以即時行情估值，取不到時用成本（損益 0）
                 rows.append(
@@ -350,9 +375,19 @@ class MockBrokerClient:
                         market_amount=market_price * pos["qty"],
                         cost=pos["cost"],
                         unrealized_pnl=(market_price - pos["cost"]) * pos["qty"],
+                        position_type=_KIND_LABELS.get(int(pos.get("kind", 0)), "現股"),
                     )
                 )
             return rows
+
+    def _seed_demo(self) -> None:
+        """植入現股/融資/融券各一筆示範庫存（不同代號，避免干擾以代號為鍵的平倉流程）。
+        僅沙盒首次啟動時呼叫，方便驗證「庫存部位」顯示；實機不會有這些資料。"""
+        self._positions.update({
+            "2330": {"qty": 2000, "cost": 1000.0, "kind": 0},   # 現股 2 張
+            "2454": {"qty": 1000, "cost": 1200.0, "kind": 1},   # 融資 1 張
+            "2317": {"qty": -1000, "cost": 200.0, "kind": 2},   # 融券 1 張（放空）
+        })
 
 
 _mock_client: MockBrokerClient | None = None

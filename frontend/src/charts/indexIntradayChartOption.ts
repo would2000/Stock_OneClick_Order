@@ -5,6 +5,11 @@ export type IndexIntradayPoint = {
   price: number;
   avgPrice: number;
   volume: number;
+  // 每分 K 的開高低收（個股由 kline 帶入）。缺值時 OHLC 模式以「前一收盤→本收盤」推導 K 棒。
+  open?: number;
+  high?: number;
+  low?: number;
+  close?: number;
 };
 
 export type IndexIntradayQuote = {
@@ -119,6 +124,8 @@ type BuildIndexIntradayChartOptionOptions = {
   colors?: IntradayChartColors;
   // 個股走勢線統一用黃色（不隨漲跌變紅綠）；指數維持紅綠不傳此旗標。
   unifiedPriceLine?: boolean;
+  // 走勢線改以 OHLC K 棒呈現。
+  showOHLC?: boolean;
 };
 
 const IMPORTANT_TIMES = new Set(["09:00", "10:00", "11:00", "12:00", "13:00", "13:30"]);
@@ -175,7 +182,12 @@ function assertValidPoints(points: IndexIntradayPoint[]) {
   });
 }
 
-function yAxisBounds(points: IndexIntradayPoint[], quote: IndexIntradayQuote, scaleMode: IndexIntradayScaleMode) {
+function yAxisBounds(
+  points: IndexIntradayPoint[],
+  quote: IndexIntradayQuote,
+  scaleMode: IndexIntradayScaleMode,
+  showOHLC = false
+) {
   const values = [
     ...points.map((point) => point.price),
     ...points.map((point) => point.avgPrice),
@@ -186,6 +198,18 @@ function yAxisBounds(points: IndexIntradayPoint[], quote: IndexIntradayQuote, sc
     quote.prevClose,
     quote.avgPrice
   ].filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+
+  // K 棒模式：把每分 K 的實際高低也納入，y 軸自適應到不裁切任何 K 棒影線。
+  if (showOHLC) {
+    for (const point of points) {
+      if (typeof point.high === "number" && Number.isFinite(point.high)) {
+        values.push(point.high);
+      }
+      if (typeof point.low === "number" && Number.isFinite(point.low)) {
+        values.push(point.low);
+      }
+    }
+  }
 
   if (scaleMode === "absolute") {
     if (quote.limitUp !== undefined) {
@@ -215,7 +239,9 @@ function buildPriceSeries(
   scaleMode: IndexIntradayScaleMode,
   colors: IntradayChartColors,
   times: string[],
-  priceLineColor?: string
+  priceLineColor?: string,
+  showOHLC = false,
+  candleData: (number | string)[][] = []
 ): SeriesOption[] {
   // 個股統一黃線（priceLineColor）；否則隨漲跌紅綠（指數用）。
   const priceColor = priceLineColor ?? (quote.change >= 0 ? colors.rise : colors.fall);
@@ -314,29 +340,53 @@ function buildPriceSeries(
     });
   }
 
-  return [
-    {
-      name: "成交",
-      type: "line",
-      xAxisIndex: 0,
-      yAxisIndex: 0,
-      showSymbol: false,
-      data: prices,
-      lineStyle: { color: priceColor, width: 1.8 },
-      itemStyle: { color: priceColor },
-      z: 4,
-      markLine: {
-        symbol: "none",
-        silent: true,
-        data: markLineData
-      },
-      markPoint: {
-        symbol: "circle",
-        symbolSize: 8,
-        silent: true,
-        data: markPointData
+  // K 棒模式：用蠟燭圖取代走勢線（漲紅 colors.rise／跌綠 colors.fall），平盤/漲跌停線沿用 markLine。
+  const priceSeries: SeriesOption = showOHLC
+    ? {
+        name: "K線",
+        type: "candlestick",
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        data: candleData,
+        barWidth: "60%",
+        itemStyle: {
+          color: colors.rise,
+          color0: colors.fall,
+          borderColor: colors.rise,
+          borderColor0: colors.fall
+        },
+        z: 4,
+        markLine: {
+          symbol: "none",
+          silent: true,
+          data: markLineData
+        }
       }
-    },
+    : {
+        name: "成交",
+        type: "line",
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        showSymbol: false,
+        data: prices,
+        lineStyle: { color: priceColor, width: 1.8 },
+        itemStyle: { color: priceColor },
+        z: 4,
+        markLine: {
+          symbol: "none",
+          silent: true,
+          data: markLineData
+        },
+        markPoint: {
+          symbol: "circle",
+          symbolSize: 8,
+          silent: true,
+          data: markPointData
+        }
+      };
+
+  return [
+    priceSeries,
     {
       name: "日均線",
       type: "line",
@@ -366,13 +416,32 @@ export function buildIndexIntradayChartOption(
 
   const scaleMode = options.scaleMode ?? "absolute";
   const colors = options.colors ?? DEFAULT_INTRADAY_CHART_COLORS;
+  const showOHLC = options.showOHLC ?? false;
   const pointByTime = new Map(points.map((point) => [point.time, point]));
   const times = SESSION_TIMES;
   const prices = times.map((time) => pointByTime.get(time)?.price ?? null);
   const avg = times.map((time) => pointByTime.get(time)?.avgPrice ?? null);
   const volume = times.map((time) => pointByTime.get(time)?.volume ?? null);
   const maxVolume = Math.max(...points.map((point) => point.volume), 1);
-  const bounds = yAxisBounds(points, quote, scaleMode);
+  const bounds = yAxisBounds(points, quote, scaleMode, showOHLC);
+
+  // 每根 K 棒以 [開, 收, 低, 高] 表示（ECharts candlestick 順序）。有實際 OHLC（個股 kline）
+  // 用實值；指數等只有收盤序列者，以「前一收盤→本收盤」推導 K 棒，仍能呈現分鐘漲跌。
+  let prevCloseForCandle = Number.isFinite(quote.prevClose) ? quote.prevClose : null;
+  const candleData: (number | string)[][] = times.map((time) => {
+    const point = pointByTime.get(time);
+    if (!point) {
+      return ["-", "-", "-", "-"];
+    }
+    const close = typeof point.close === "number" ? point.close : point.price;
+    const hasRealOHLC =
+      typeof point.open === "number" && typeof point.high === "number" && typeof point.low === "number";
+    const open = hasRealOHLC ? (point.open as number) : prevCloseForCandle ?? point.price;
+    const high = hasRealOHLC ? (point.high as number) : Math.max(open, close);
+    const low = hasRealOHLC ? (point.low as number) : Math.min(open, close);
+    prevCloseForCandle = close;
+    return [open, close, low, high];
+  });
 
   return {
     backgroundColor: colors.background,
@@ -399,7 +468,8 @@ export function buildIndexIntradayChartOption(
       type: "category",
       gridIndex: 0,
       data: times,
-      boundaryGap: false,
+      // K 棒模式留邊距，避免首/末根 K 棒被格線裁切；走勢線維持貼邊。
+      boundaryGap: showOHLC,
       axisLabel: {
         show: true,
         color: colors.muted,
@@ -447,7 +517,17 @@ export function buildIndexIntradayChartOption(
       }
     ],
     series: [
-      ...buildPriceSeries(prices, avg, quote, scaleMode, colors, times, options.unifiedPriceLine ? colors.priceLine : undefined),
+      ...buildPriceSeries(
+        prices,
+        avg,
+        quote,
+        scaleMode,
+        colors,
+        times,
+        options.unifiedPriceLine ? colors.priceLine : undefined,
+        showOHLC,
+        candleData
+      ),
       {
         name: "成交量",
         type: "bar",

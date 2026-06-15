@@ -211,6 +211,7 @@ function TickList({ ticks, hint }: { ticks: TickRecord[]; hint: string }) {
 
 export function IndexIntradayChart({ points, quote, height = 760, fiveTick, ticks, ticksHint, themeKey, unifiedPriceLine, volumeUnit }: IndexIntradayChartProps) {
   const [scaleMode, setScaleMode] = useState<IndexIntradayScaleMode>("relative");
+  const [showOHLC, setShowOHLC] = useState(false);
   const [footerTab, setFooterTab] = useState<"five" | "stats">("five");
   const [colors, setColors] = useState<IntradayChartColors>(() => readChartColors());
   // 主題切換後（themeKey 改變）於 DOM 套用新 class 後重讀 CSS 變數。
@@ -220,8 +221,8 @@ export function IndexIntradayChart({ points, quote, height = 760, fiveTick, tick
   const hasFooterTabs = fiveTick !== undefined;
   const hasQuote = quote.currentPrice > 0;
   const option = useMemo(
-    () => (points.length > 0 ? buildIndexIntradayChartOption(points, quote, { scaleMode, colors, unifiedPriceLine }) : null),
-    [points, quote, scaleMode, colors, unifiedPriceLine]
+    () => (points.length > 0 ? buildIndexIntradayChartOption(points, quote, { scaleMode, colors, unifiedPriceLine, showOHLC }) : null),
+    [points, quote, scaleMode, colors, unifiedPriceLine, showOHLC]
   );
 
   return (
@@ -232,6 +233,16 @@ export function IndexIntradayChart({ points, quote, height = 760, fiveTick, tick
           <span>{points[points.length - 1]?.time ?? "--:--"}</span>
         </div>
         <div className="indexIntradayHeaderTools">
+          <div className="indexScaleToggle" aria-label="OHLC 顯示">
+            <button
+              className={!showOHLC ? "active" : ""}
+              onClick={() => setShowOHLC((on) => !on)}
+              type="button"
+              title="切換 OHLC（K 棒）顯示"
+            >
+              OHLC
+            </button>
+          </div>
           <div className="indexScaleToggle" aria-label="價格縮放模式">
             <button
               className={scaleMode === "relative" ? "active" : ""}

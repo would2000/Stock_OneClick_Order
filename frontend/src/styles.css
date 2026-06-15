@@ -704,6 +704,27 @@ label {
   color: var(--ladder-sell);
 }
 
+.flashPositions {
+  align-items: center;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 4px 10px;
+  padding: 3px 6px;
+}
+
+.flashPosLabel {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.flashPosNone {
+  color: var(--muted);
+  font-weight: 600;
+}
+
 .flashBar {
   display: grid;
   gap: 2px;
@@ -866,7 +887,8 @@ label {
   padding: 6px;
 }
 
-.previewBox.empty {
+.previewBox.empty,
+.sendResult.empty {
   color: var(--muted);
 }
 
@@ -1009,6 +1031,20 @@ dd {
 .alertTable td:last-child {
   max-width: 160px;
   text-align: left;
+}
+
+/* 自選股報價列的迷你 K 棒：顏色繼承儲存格 .up/.down 主題色（currentColor）。 */
+.kbarCell {
+  text-align: center;
+}
+
+.miniKbar {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.kbarEmpty {
+  color: var(--muted);
 }
 
 .selectableTable tbody tr {

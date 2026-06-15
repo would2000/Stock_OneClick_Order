@@ -932,18 +932,47 @@ class YuantaClient:
         payload = self._run_action("GetStoreSummary")
         rows = []
         for item in payload.StkStoreList:
+            quantity = int(item.StockQty)
+            position_type = self._store_position_type(item)
+            # 融券為放空部位，統一以負股數表示（與沙盒／未實現損益多空慣例一致）。
+            if position_type == "融券" and quantity > 0:
+                quantity = -quantity
             rows.append(
                 Position(
                     symbol=str(item.StkCode),
                     name=str(item.StkName),
-                    quantity=int(item.StockQty),
+                    quantity=quantity,
                     market_price=float(item.MarketPrice),
                     market_amount=float(item.MarketAmt),
                     cost=float(item.Cost),
                     unrealized_pnl=float(item.ReturnAmt),
+                    position_type=position_type,
                 )
             )
         return rows
+
+    @staticmethod
+    def _store_position_type(item) -> str:
+        """元大庫存列的部位種類（現股／融資／融券）。
+
+        ⚠️ 待實機驗證：StkStoreList 的交易類別欄位名與代碼對照無法在無 SDK 下確認，
+        此處防禦式嘗試常見欄位名（TradeKind/OrderType/Trust/CrdType...），對照常見
+        代碼（融資=3、融券=4、現股=0），取不到時一律視為現股。實機請印出 item 屬性核對。
+        """
+        raw = None
+        for attr in ("TradeKind", "OrderType", "Trust", "CrdType", "TradeType", "MarginKind"):
+            value = getattr(item, attr, None)
+            if value not in (None, ""):
+                raw = str(value).strip()
+                break
+        if raw is None:
+            return "現股"
+        token = raw.lower()
+        if any(k in token for k in ("融資", "margin", "3")) and "融券" not in raw:
+            return "融資"
+        if any(k in token for k in ("融券", "short", "4")):
+            return "融券"
+        return "現股"
 
     def get_kline(
         self,

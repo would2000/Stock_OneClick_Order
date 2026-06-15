@@ -102,7 +102,9 @@ export type Position = {
   quantity: number;
   market_price: number | null;
   market_amount: number | null;
+  cost: number | null;
   unrealized_pnl: number | null;
+  position_type: string;
 };
 
 export type OrderRequest = {

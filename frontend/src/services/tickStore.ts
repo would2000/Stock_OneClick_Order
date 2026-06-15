@@ -8,7 +8,9 @@ import type { TickRecord } from "../types/api";
 
 const DB_NAME = "yuanta-trading";
 const STORE = "dailyTicks";
-const MAX_TICKS = 2000;
+// 成交明細保留筆數上限（前端 state / IndexedDB 共用，與後端 deque 一致）。
+// 注意：此為「訂閱後累積」的上限，無法回補訂閱前（開盤段）的明細。
+export const MAX_TICKS = 8000;
 
 function todayText() {
   const now = new Date();

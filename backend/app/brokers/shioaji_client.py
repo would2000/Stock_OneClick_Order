@@ -333,7 +333,7 @@ class ShioajiClient:
             buffer = self._ticks.get(symbol)
             return list(buffer)[-limit:] if buffer else []
 
-    def get_tick_detail(self, symbol: str, market: str = "TWSE", select_type: int = 1, count: int = 5000) -> list[TickRecord]:
+    def get_tick_detail(self, symbol: str, market: str = "TWSE", select_type: int = 1, count: int = 8000) -> list[TickRecord]:
         api = self._ensure_connected()
         contract = self._contract(symbol)
         data = api.ticks(contract=contract, date=datetime.now().strftime("%Y-%m-%d"))
@@ -362,7 +362,7 @@ class ShioajiClient:
         self.subscribe_quotes([symbol])
         with self._live_lock:
             self._tick_subscribed.add(symbol)
-            self._ticks.setdefault(symbol, deque(maxlen=5000))
+            self._ticks.setdefault(symbol, deque(maxlen=8000))
         try:
             history = self.get_tick_detail(symbol, "TWSE")
         except Exception:
@@ -371,7 +371,7 @@ class ShioajiClient:
             with self._live_lock:
                 buffer = self._ticks.get(symbol)
                 if buffer is not None and not buffer:
-                    buffer.extend(history[-5000:])
+                    buffer.extend(history[-8000:])
                     self._tick_serial = max(self._tick_serial, len(history))
                     self._tick_version += 1
 
@@ -435,6 +435,18 @@ class ShioajiClient:
             raise YuantaClientError(f"list_positions failed: {exc}") from exc
         for item in positions:
             quantity = int(item.quantity) * 1000  # shares, to match Yuanta semantics
+            # 部位種類：Shioaji StockOrderCond = Cash/MarginTrading/ShortSelling。
+            cond = str(getattr(item, "cond", "")).lower()
+            if "margin" in cond:
+                position_type = "融資"
+            elif "short" in cond:
+                position_type = "融券"
+            else:
+                position_type = "現股"
+            # 賣方(融券放空)以負股數表示，與沙盒/未實現損益(現價-成本)×股數的多空慣例一致。
+            direction = str(getattr(item, "direction", "")).lower()
+            if "sell" in direction:
+                quantity = -abs(quantity)
             price = float(item.last_price or 0)
             rows.append(
                 Position(
@@ -445,6 +457,7 @@ class ShioajiClient:
                     market_amount=price * quantity if price else None,
                     cost=float(item.price or 0) or None,
                     unrealized_pnl=float(item.pnl or 0),
+                    position_type=position_type,
                 )
             )
         return rows

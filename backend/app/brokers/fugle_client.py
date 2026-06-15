@@ -325,7 +325,7 @@ class FugleMarketData:
                         if data.get("ask"):
                             quote.ask_price = _num(data.get("ask"))
                         quote.source = "fugle-ws"
-                    buf = self._live_ticks.setdefault(symbol, deque(maxlen=5000))
+                    buf = self._live_ticks.setdefault(symbol, deque(maxlen=8000))
                     self._serial += 1
                     buf.append(
                         TickRecord(

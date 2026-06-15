@@ -192,7 +192,7 @@ class QuoteBroadcaster:
                     for symbol in tick_symbols:
                         # Full-day snapshot when the user switches symbol;
                         # a small tail window for routine updates.
-                        ticks = client.get_ticks(symbol, limit=5000 if tick_selection_changed else 500)
+                        ticks = client.get_ticks(symbol, limit=8000 if tick_selection_changed else 500)
                         await self._broadcast(
                             sockets,
                             {"type": "ticks", "symbol": symbol, "data": [tick.model_dump() for tick in ticks]},

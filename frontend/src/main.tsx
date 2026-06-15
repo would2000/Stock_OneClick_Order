@@ -44,7 +44,7 @@ import type {
 } from "./types/api";
 import "./styles.css";
 import { useQuoteStream } from "./services/quoteStream";
-import { loadDailyTicks, saveDailyTicks } from "./services/tickStore";
+import { loadDailyTicks, saveDailyTicks, MAX_TICKS } from "./services/tickStore";
 import type { IndexIntradayPoint, IndexIntradayQuote } from "./charts/indexIntradayChartOption";
 import { IndexIntradayChart } from "./components/IndexIntradayChart";
 import { IndexIntradayChartDemo } from "./pages/IndexIntradayChartDemo";
@@ -55,7 +55,7 @@ type ThemeName = "light" | "dark" | "warm" | "cool";
 type MainTab = "orders" | "mit" | "inventory";
 // all=全部委託、none=未成交(含取消)、partial=未完全成交、filled=已成交
 type OrderFilter = "all" | "none" | "partial" | "filled";
-type PortfolioTab = "live" | "watchlist";
+type PortfolioTab = "live" | "watchlist" | "watchquote";
 type WatchItem = { symbol: string; name: string; cost: number; lots: number; shares: number };
 type IndexIntradayModel = { points: IndexIntradayPoint[]; quote: IndexIntradayQuote };
 type LightningActionKind = "order" | "mit";
@@ -88,7 +88,7 @@ type PriceLadderRow = {
 };
 
 const defaultOrder: OrderRequest = {
-  symbol: "2885",
+  symbol: "2330",
   side: "B",
   price: 0,
   quantity: 1,
@@ -202,6 +202,51 @@ function numberText(value: number | null | undefined, digits = 2) {
   return value.toLocaleString("zh-TW", { maximumFractionDigits: digits });
 }
 
+// 用即時市價重算未實現損益：(現價 - 成本) × 股數，股數帶正負號故多空皆適用。
+// 缺即時價或成本時退回券商回傳的 unrealized_pnl，避免顯示錯誤的 0。
+function livePnl(position: Position, livePrice: number | null | undefined) {
+  if (livePrice === null || livePrice === undefined || position.cost === null || position.cost === undefined) {
+    return position.unrealized_pnl ?? null;
+  }
+  return (livePrice - position.cost) * position.quantity;
+}
+
+// 自選股報價列的迷你 K 棒：以今日開高低收畫一根小蠟燭，收≥開為紅(漲, .down)、收<開為綠(跌, .up)。
+function MiniKbar({
+  open,
+  high,
+  low,
+  close
+}: {
+  open: number | null | undefined;
+  high: number | null | undefined;
+  low: number | null | undefined;
+  close: number | null | undefined;
+}) {
+  if (
+    open == null || high == null || low == null || close == null ||
+    !Number.isFinite(open) || !Number.isFinite(high) || !Number.isFinite(low) || !Number.isFinite(close) ||
+    high < low || high <= 0
+  ) {
+    return <span className="kbarEmpty">-</span>;
+  }
+  const W = 16;
+  const H = 26;
+  const pad = 2;
+  const range = high - low || 1;
+  const y = (value: number) => pad + (1 - (value - low) / range) * (H - pad * 2);
+  const cx = W / 2;
+  const bodyTop = y(Math.max(open, close));
+  const bodyHeight = Math.max(1, y(Math.min(open, close)) - bodyTop);
+  const up = close >= open;
+  return (
+    <svg className={`miniKbar ${up ? "down" : "up"}`} width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
+      <line x1={cx} y1={y(high)} x2={cx} y2={y(low)} stroke="currentColor" strokeWidth={1} />
+      <rect x={cx - 4} y={bodyTop} width={8} height={bodyHeight} fill="currentColor" />
+    </svg>
+  );
+}
+
 function priceTick(price: number) {
   if (price < 10) return 0.01;
   if (price < 50) return 0.05;
@@ -262,7 +307,12 @@ function klineToIndexPoints(points: KLinePoint[]): IndexIntradayPoint[] {
         time: point.timestamp.slice(11, 16),
         price: point.close,
         avgPrice: totalVolume ? totalPriceVolume / totalVolume : point.close,
-        volume
+        volume,
+        // 保留每分 K 的開高低收，供圖表 OHLC（K 棒）模式繪製。
+        open: point.open,
+        high: point.high,
+        low: point.low,
+        close: point.close
       };
     })
     .sort((left, right) => left.time.localeCompare(right.time));
@@ -302,6 +352,23 @@ function modelFromIndexResponse(response: IndexIntradayResponse): IndexIntradayM
   };
 }
 
+// 由券商報價推導「平盤(參考價)、漲停、跌停」。
+// 台股漲跌停 = 參考價 ±10%；除權息日(代號帶 * )參考價會向下調整，故不能用昨收推算。
+// 券商回傳的 up_limit/down_limit 已是交易所實際值，優先採用，並以兩者中點反推參考價(平盤)，
+// 確保平盤／漲停／跌停三條線彼此一致；缺券商漲跌停時才退回 fallbackRef ×1.1/0.9 估算。
+function deriveLimits(quote: Quote | undefined, fallbackRef: number) {
+  const up = quote?.up_limit ?? null;
+  const down = quote?.down_limit ?? null;
+  if (up && up > 0 && down && down > 0) {
+    return { reference: Math.round(((up + down) / 2) * 100) / 100, limitUp: up, limitDown: down };
+  }
+  return {
+    reference: fallbackRef,
+    limitUp: Math.round(fallbackRef * 1.1 * 100) / 100,
+    limitDown: Math.round(fallbackRef * 0.9 * 100) / 100
+  };
+}
+
 function buildIndexModelFromPoints(
   market: "TSE" | "OTC",
   symbolName: string,
@@ -317,7 +384,8 @@ function buildIndexModelFromPoints(
   const openPrice = prices[0] ?? currentPrice;
   const avgPrice = points[points.length - 1]?.avgPrice ?? currentPrice;
   const volume = quote?.total_volume ?? volumes.reduce((sum, item) => sum + item, 0);
-  const change = currentPrice - prevClose;
+  const { reference, limitUp, limitDown } = deriveLimits(quote, prevClose);
+  const change = currentPrice - reference;
 
   return {
     points,
@@ -330,18 +398,18 @@ function buildIndexModelFromPoints(
       openPrice,
       highPrice,
       lowPrice,
-      prevClose,
+      prevClose: reference,
       avgPrice,
       change,
-      changePercent: prevClose ? (change / prevClose) * 100 : 0,
-      amplitudePercent: prevClose ? ((highPrice - lowPrice) / prevClose) * 100 : 0,
+      changePercent: reference ? (change / reference) * 100 : 0,
+      amplitudePercent: reference ? ((highPrice - lowPrice) / reference) * 100 : 0,
       volume,
       lastVolume: volumes[volumes.length - 1],
       innerVolume: Math.round(volume * 0.52),
       outerVolume: Math.round(volume * 0.48),
       volumeIncreasePercent: 0,
-      limitUp: Math.round(prevClose * 1.1 * 100) / 100,
-      limitDown: Math.round(prevClose * 0.9 * 100) / 100
+      limitUp,
+      limitDown
     }
   };
 }
@@ -480,7 +548,7 @@ function App({ theme, setTheme, onLogout }: AppProps) {
   const [editHitRow, setEditHitRow] = useState(-1);
   const editSearchTimerRef = useRef(0);
   const MAX_WATCHLISTS = 10;
-  const [selectedSymbol, setSelectedSymbol] = useState("2885");
+  const [selectedSymbol, setSelectedSymbol] = useState("2330");
   const [selectedKline, setSelectedKline] = useState<KLinePoint[]>([]);
   const [tseIndex, setTseIndex] = useState<IndexIntradayModel>(() => buildEmptyIndexModel("TSE", "加權指數 TSE.TW"));
   const [otcIndex, setOtcIndex] = useState<IndexIntradayModel>(() => buildEmptyIndexModel("OTC", "櫃買指數 OTC.TW"));
@@ -581,7 +649,7 @@ function App({ theme, setTheme, onLogout }: AppProps) {
       incoming.forEach((tick) => merged.set(keyOf(tick), tick));
       const list = Array.from(merged.values())
         .sort((a, b) => (a.serial || 0) - (b.serial || 0) || a.time.localeCompare(b.time))
-        .slice(-2000);
+        .slice(-MAX_TICKS);
       void saveDailyTicks(incoming[0].symbol, list);
       return list;
     });
@@ -671,6 +739,8 @@ function App({ theme, setTheme, onLogout }: AppProps) {
   const selectedQuote = quoteBySymbol.get(selectedSymbol);
   const selectedWatchItem = watchlist.find((item) => item.symbol === selectedSymbol);
   const selectedPosition = positions.find((item) => item.symbol === selectedSymbol);
+  // 目前商品的所有庫存部位（同檔可能有現股／融資／融券多列），顯示於閃電下單委買賣上方。
+  const selectedPositions = positions.filter((item) => item.symbol === selectedSymbol && item.quantity !== 0);
   // 閃電下單商品欄位的股票名稱（隨 order.symbol 代號變動）。
   const orderName = nameFor(order.symbol);
   const selectedFallbackPrice =
@@ -862,9 +932,7 @@ function App({ theme, setTheme, onLogout }: AppProps) {
       setCandidates(candidatesRes);
       setKillSwitchOn(riskRes.enabled);
       setYuantaStatus(statusRes);
-      if (candidatesRes.length > 0) {
-        setOrder((current) => ({ ...current, symbol: candidatesRes[0].symbol }));
-      }
+      // 預設聚焦 2330（閃電下單與分時走勢圖一致），不再連線時自動跳到第一個候選股。
       void refreshMitOrders();
       void getBrokerInfo().then(setBrokerInfo).catch(() => undefined);
       setMessage("報價已連線。");
@@ -1592,6 +1660,50 @@ function App({ theme, setTheme, onLogout }: AppProps) {
     }
   }, [mainTab]);
 
+  // 自選股清單管理列（選股清單／新增／改名／刪除／編輯股票），自選股庫存與自選股報價兩分頁共用。
+  const watchlistManageBar = (
+    <div className="watchToolbar watchlistBar">
+      {confirmingDeleteList ? (
+        <>
+          <span className="watchlistEditLabel deleteWarn">刪除「{activeWatchlist?.name}」？無法復原</span>
+          <button className="danger" onClick={confirmDeleteWatchlist} title="確定刪除此清單"><Trash2 size={14} />確定刪除</button>
+          <button onClick={() => setConfirmingDeleteList(false)} title="取消"><X size={14} />取消</button>
+        </>
+      ) : renamingList ? (
+        <>
+          <input
+            className="listNameInput"
+            value={listNameDraft}
+            autoFocus
+            placeholder="清單名稱"
+            onChange={(event) => setListNameDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                saveRenameList();
+              } else if (event.key === "Escape") {
+                setRenamingList(false);
+              }
+            }}
+          />
+          <button onClick={saveRenameList} title="確定改名"><Save size={14} /></button>
+          <button onClick={() => setRenamingList(false)} title="取消"><X size={14} /></button>
+        </>
+      ) : (
+        <>
+          <select value={activeWatchlistId} onChange={(event) => setActiveWatchlistId(event.target.value)} title="切換清單">
+            {watchlists.map((list) => (
+              <option key={list.id} value={list.id}>{list.name}</option>
+            ))}
+          </select>
+          <button onClick={addWatchlist} disabled={watchlists.length >= MAX_WATCHLISTS} title={watchlists.length >= MAX_WATCHLISTS ? `最多 ${MAX_WATCHLISTS} 個清單` : "新增清單"}><Plus size={14} /></button>
+          <button onClick={startRenameList} title="清單改名"><Pencil size={13} />改名</button>
+          <button className="danger" onClick={requestDeleteWatchlist} disabled={watchlists.length <= 1} title="刪除清單"><Trash2 size={14} /></button>
+          <button onClick={openWatchlistEditor} title="編輯清單內股票">編輯股票</button>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <main className={`appShell theme-${theme}`}>
       <header className="commandBar">
@@ -1686,7 +1798,6 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                 >
                   查詢
                 </button>
-                <button onClick={() => void refreshQuotes()} disabled={busy}>報價</button>
               </div>
               {mainTab === "orders" ? (
                 <div className="scrollPane">
@@ -1894,9 +2005,10 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                         const quote = quoteBySymbol.get(position.symbol);
                         const livePrice = quote?.deal_price ?? position.market_price;
                         const liveMarketAmount = livePrice ? livePrice * position.quantity : position.market_amount;
+                        const pnl = livePnl(position, livePrice);
                         const checked = invSelected.has(position.symbol);
                         return (
-                          <tr key={position.symbol} onClick={() => selectForChart(position.symbol)}>
+                          <tr key={`${position.symbol}-${position.position_type}`} onClick={() => selectForChart(position.symbol)}>
                             <td onClick={(event) => event.stopPropagation()}>
                               <input
                                 type="checkbox"
@@ -1934,7 +2046,7 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                               />
                             </td>
                             <td>{numberText(liveMarketAmount, 0)}</td>
-                            <td className={(position.unrealized_pnl ?? 0) >= 0 ? "down" : "up"}>{numberText(position.unrealized_pnl, 0)}</td>
+                            <td className={(pnl ?? 0) >= 0 ? "down" : "up"}>{numberText(pnl, 0)}</td>
                           </tr>
                         );
                       })}
@@ -2144,6 +2256,21 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                       );
                     })}
                   </div>
+                  <div className="flashPositions">
+                    <span className="flashPosLabel">庫存部位</span>
+                    {selectedPositions.length > 0 ? (
+                      selectedPositions.map((pos) => (
+                        <span
+                          key={`${pos.symbol}-${pos.position_type}`}
+                          className={`flashPosItem ${pos.quantity >= 0 ? "down" : "up"}`}
+                        >
+                          {pos.position_type} {numberText(pos.quantity / 1000, 0)} 張
+                        </span>
+                      ))
+                    ) : (
+                      <span className="flashPosItem flashPosNone">無</span>
+                    )}
+                  </div>
                   <div className="flashStats">
                     <span className="flashStatBuy">委買 {flashTotals.buyOrder}・MIT {flashTotals.buyMit} 張</span>
                     <span className="flashStatSell">委賣 {flashTotals.sellOrder}・MIT {flashTotals.sellMit} 張</span>
@@ -2161,8 +2288,27 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                 <input type="checkbox" checked={confirmBeforeSend} onChange={(event) => setConfirmBeforeSend(event.target.checked)} />
                 送單前二次確認
               </label>
-              {sending ? <div className="sendingHint"><Loader2 size={14} className="spin" /> 委託送出中…</div> : null}
-              {lastOrderResult ? <div className={lastOrderResult.accepted ? "sendResult ok" : "sendResult blocked"}><strong>{lastOrderResult.accepted ? "送單已接受" : "送單未送出"}</strong><span>{lastOrderResult.message}</span></div> : null}
+              {/* 送單狀態框固定高度，無論閒置／送出中／有結果都保留同樣大小，版面不忽大忽小。 */}
+              <div
+                className={
+                  sending
+                    ? "sendResult"
+                    : lastOrderResult
+                      ? `sendResult ${lastOrderResult.accepted ? "ok" : "blocked"}`
+                      : "sendResult empty"
+                }
+              >
+                {sending ? (
+                  <span className="sendingHint"><Loader2 size={14} className="spin" /> 委託送出中…</span>
+                ) : lastOrderResult ? (
+                  <>
+                    <strong>{lastOrderResult.accepted ? "送單已接受" : "送單未送出"}</strong>
+                    <span>{lastOrderResult.message}</span>
+                  </>
+                ) : (
+                  <span>尚無送單結果</span>
+                )}
+              </div>
         </aside>
 
         {invConfirmOpen ? (
@@ -2179,7 +2325,7 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                     const { side, price, isLong, limitKind } = invCloseOrder(position);
                     const lots = invLotsFor(position);
                     return (
-                      <tr key={position.symbol}>
+                      <tr key={`${position.symbol}-${position.position_type}`}>
                         <td>{position.name} {position.symbol}</td>
                         <td className={isLong ? "down" : "up"}>{isLong ? "多" : "空"}</td>
                         <td className={side === "B" ? "down" : "up"}>{side === "B" ? "買進" : "賣出"}</td>
@@ -2268,22 +2414,53 @@ function App({ theme, setTheme, onLogout }: AppProps) {
           <div className="tabs">
             <button className={portfolioTab === "live" ? "active" : ""} onClick={() => setPortfolioTab("live")}>全部庫存 報價組合</button>
             <button className={portfolioTab === "watchlist" ? "active" : ""} onClick={() => setPortfolioTab("watchlist")}>自選股庫存</button>
+            <button className={portfolioTab === "watchquote" ? "active" : ""} onClick={() => setPortfolioTab("watchquote")}>自選股報價</button>
           </div>
           {portfolioTab === "live" ? (
             <table className="denseTable selectableTable">
-              <thead><tr><th>商品</th><th>代碼</th><th>成交</th><th>庫存</th><th>損益</th></tr></thead>
+              <thead><tr><th>商品</th><th>代碼</th><th>成交</th><th>成本</th><th>庫存</th><th>損益</th></tr></thead>
               <tbody>
                 {positions.map((position) => {
                   const quote = quoteBySymbol.get(position.symbol);
                   const livePrice = quote?.deal_price ?? position.market_price;
+                  const pnl = livePnl(position, livePrice);
                   return (
-                    <tr key={position.symbol} className={selectedSymbol === position.symbol ? "selectedRow" : ""} onClick={() => selectForChart(position.symbol)}>
-                      <td>{position.name}</td><td>{position.symbol}</td><td>{numberText(livePrice)}</td><td>{position.quantity}</td><td className={(position.unrealized_pnl ?? 0) >= 0 ? "down" : "up"}>{numberText(position.unrealized_pnl, 0)}</td>
+                    <tr key={`${position.symbol}-${position.position_type}`} className={selectedSymbol === position.symbol ? "selectedRow" : ""} onClick={() => selectForChart(position.symbol)}>
+                      <td>{position.name || nameFor(position.symbol)}</td><td>{position.symbol}</td><td>{numberText(livePrice)}</td><td>{numberText(position.cost)}</td><td>{position.quantity}</td><td className={(pnl ?? 0) >= 0 ? "down" : "up"}>{numberText(pnl, 0)}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+          ) : portfolioTab === "watchquote" && !watchlistEditing ? (
+            <>
+              {watchlistManageBar}
+              <table className="denseTable selectableTable">
+                <thead><tr><th>商品</th><th>代碼</th><th>成交</th><th>Ｋ棒</th><th>漲幅％</th><th>總量</th></tr></thead>
+                <tbody>
+                  {watchlist.map((item, index) => {
+                    const quote = quoteBySymbol.get(item.symbol);
+                    const price = quote?.deal_price ?? null;
+                    const prev = quote?.prev_close ?? null;
+                    const changePct = price !== null && prev !== null && prev > 0 ? ((price - prev) / prev) * 100 : null;
+                    const trend = changePct === null || changePct === 0 ? "" : changePct > 0 ? "down" : "up";
+                    return (
+                      <tr key={`${item.symbol}-${index}`} className={selectedSymbol === item.symbol ? "selectedRow" : ""} onClick={() => item.symbol && selectForChart(item.symbol)}>
+                        <td>{item.name}</td>
+                        <td>{item.symbol}</td>
+                        <td className={trend}>{numberText(price)}</td>
+                        <td className="kbarCell"><MiniKbar open={quote?.open_price ?? null} high={quote?.high_price ?? null} low={quote?.low_price ?? null} close={price} /></td>
+                        <td className={trend}>{changePct === null ? "-" : `${changePct > 0 ? "▲" : changePct < 0 ? "▼" : ""}${numberText(Math.abs(changePct))}%`}</td>
+                        <td>{quote?.total_volume ? numberText(quote.total_volume, 0) : "-"}</td>
+                      </tr>
+                    );
+                  })}
+                  {watchlist.length === 0 ? (
+                    <tr><td colSpan={6}>此清單尚無股票，於「自選股庫存」分頁編輯。</td></tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </>
           ) : watchlistEditing ? (
             <>
               <div className="watchToolbar">
@@ -2344,46 +2521,7 @@ function App({ theme, setTheme, onLogout }: AppProps) {
             </>
           ) : (
             <>
-              <div className="watchToolbar watchlistBar">
-                {confirmingDeleteList ? (
-                  <>
-                    <span className="watchlistEditLabel deleteWarn">刪除「{activeWatchlist?.name}」？無法復原</span>
-                    <button className="danger" onClick={confirmDeleteWatchlist} title="確定刪除此清單"><Trash2 size={14} />確定刪除</button>
-                    <button onClick={() => setConfirmingDeleteList(false)} title="取消"><X size={14} />取消</button>
-                  </>
-                ) : renamingList ? (
-                  <>
-                    <input
-                      className="listNameInput"
-                      value={listNameDraft}
-                      autoFocus
-                      placeholder="清單名稱"
-                      onChange={(event) => setListNameDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          saveRenameList();
-                        } else if (event.key === "Escape") {
-                          setRenamingList(false);
-                        }
-                      }}
-                    />
-                    <button onClick={saveRenameList} title="確定改名"><Save size={14} /></button>
-                    <button onClick={() => setRenamingList(false)} title="取消"><X size={14} /></button>
-                  </>
-                ) : (
-                  <>
-                    <select value={activeWatchlistId} onChange={(event) => setActiveWatchlistId(event.target.value)} title="切換清單">
-                      {watchlists.map((list) => (
-                        <option key={list.id} value={list.id}>{list.name}</option>
-                      ))}
-                    </select>
-                    <button onClick={addWatchlist} disabled={watchlists.length >= MAX_WATCHLISTS} title={watchlists.length >= MAX_WATCHLISTS ? `最多 ${MAX_WATCHLISTS} 個清單` : "新增清單"}><Plus size={14} /></button>
-                    <button onClick={startRenameList} title="清單改名"><Pencil size={13} />改名</button>
-                    <button className="danger" onClick={requestDeleteWatchlist} disabled={watchlists.length <= 1} title="刪除清單"><Trash2 size={14} /></button>
-                    <button onClick={openWatchlistEditor} title="編輯清單內股票">編輯股票</button>
-                  </>
-                )}
-              </div>
+              {watchlistManageBar}
               <table className="denseTable selectableTable">
                 <thead><tr><th>商品</th><th>代碼</th><th>成本</th><th>張數</th><th>股數</th><th>現價</th><th>損益</th><th>報酬率</th></tr></thead>
                 <tbody>

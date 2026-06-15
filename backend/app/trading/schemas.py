@@ -73,6 +73,7 @@ class Position(BaseModel):
     market_amount: float | None = None
     cost: float | None = None
     unrealized_pnl: float | None = None
+    position_type: str = "現股"  # 現股 / 融資 / 融券（同檔可有多種，分列）
 
 
 class OrderRequest(BaseModel):
