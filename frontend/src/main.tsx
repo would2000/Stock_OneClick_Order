@@ -2470,7 +2470,8 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                 <button onClick={cancelWatchlistEditor}><X size={14} />取消</button>
               </div>
               <table className="denseTable editableTable">
-                <thead><tr><th>商品</th><th>代碼</th><th>成本</th><th>張數</th><th>股數</th><th>刪除</th></tr></thead>
+                {/* 自選股「報價」只需代號；成本/張數/股數僅「庫存」分頁編輯時才出現。 */}
+                <thead><tr><th>商品</th><th>代碼</th>{portfolioTab !== "watchquote" ? <><th>成本</th><th>張數</th><th>股數</th></> : null}<th>刪除</th></tr></thead>
                 <tbody>
                   {watchlistDraft.map((item, index) => {
                     return (
@@ -2506,15 +2507,19 @@ function App({ theme, setTheme, onLogout }: AppProps) {
                             ) : null}
                           </div>
                         </td>
-                        <td><input type="number" value={item.cost} onChange={(event) => updateWatchItem(index, { cost: Number(event.target.value) })} /></td>
-                        <td><input type="number" min="0" value={item.lots} onChange={(event) => updateWatchItem(index, { lots: Math.max(0, Number(event.target.value) || 0) })} /></td>
-                        <td><input type="number" min="0" value={item.shares} onChange={(event) => updateWatchItem(index, { shares: Math.max(0, Number(event.target.value) || 0) })} /></td>
+                        {portfolioTab !== "watchquote" ? (
+                          <>
+                            <td><input type="number" value={item.cost} onChange={(event) => updateWatchItem(index, { cost: Number(event.target.value) })} /></td>
+                            <td><input type="number" min="0" value={item.lots} onChange={(event) => updateWatchItem(index, { lots: Math.max(0, Number(event.target.value) || 0) })} /></td>
+                            <td><input type="number" min="0" value={item.shares} onChange={(event) => updateWatchItem(index, { shares: Math.max(0, Number(event.target.value) || 0) })} /></td>
+                          </>
+                        ) : null}
                         <td><button className="iconButton danger" onClick={() => deleteWatchItem(index)} title="刪除"><Trash2 size={14} /></button></td>
                       </tr>
                     );
                   })}
                   {watchlistDraft.length === 0 ? (
-                    <tr><td colSpan={6}>按「新增」加入股票。</td></tr>
+                    <tr><td colSpan={portfolioTab !== "watchquote" ? 6 : 3}>按「新增」加入股票。</td></tr>
                   ) : null}
                 </tbody>
               </table>
