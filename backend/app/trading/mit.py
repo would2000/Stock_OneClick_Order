@@ -13,10 +13,10 @@ import os
 from datetime import datetime
 
 from ..database import connect
-from ..trading.risk import audit_order, is_kill_switch_enabled, preview_order
+from ..trading.orders import submit_order
+from ..trading.risk import is_kill_switch_enabled
 from ..trading.schemas import MitOrderCreate, MitOrderRecord, OrderRequest, QuoteResponse
 from ..broker import get_active_client, is_sim_session
-from ..yuanta.client import YuantaClientError
 
 logger = logging.getLogger("mit")
 
@@ -114,20 +114,7 @@ def _fire_order(order: MitOrderRecord, deal_price: float) -> None:
         confirm_send_order=True,
     )
     triggered_at = _now()
-    # 模擬沙盒不做風控；實單以觸發價當市價單參考價估算金額。
-    if not is_sim_session():
-        preview = preview_order(request, reference_price=deal_price)
-        if not preview.accepted:
-            audit_order(request, "mit-blocked", "blocked", preview.message)
-            _update_mit_order(order.id, status="failed", triggered_at=triggered_at, message=preview.message)
-            return
-    try:
-        result = get_active_client().send_stock_order(request)
-    except YuantaClientError as exc:
-        audit_order(request, "mit-live", "error", str(exc))
-        _update_mit_order(order.id, status="failed", triggered_at=triggered_at, message=str(exc))
-        return
-    audit_order(request, "mit-" + result.mode, "accepted" if result.accepted else "blocked", result.message)
+    result = submit_order(request, source="mit", reference_price=deal_price)
     _update_mit_order(
         order.id,
         status="sent" if result.accepted else "failed",

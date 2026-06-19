@@ -29,7 +29,7 @@ class Settings:
         self.database_path = Path(os.getenv("TRADING_DB_PATH", self.data_dir / "trading.db"))
         self.market_data_root = os.getenv(
             "TW_MARKET_DATA_ROOT",
-            "/path/to/local/Library/CloudStorage/GoogleDrive-example-account/我的雲端硬碟/vault/專案庫/TW_Market_Data_Backfill",
+            str(self.data_dir / "market_data"),
         )
         self.yuanta_account = os.getenv("YUANTA_ACCOUNT", "")
         self.yuanta_password = os.getenv("YUANTA_PASSWORD", "")

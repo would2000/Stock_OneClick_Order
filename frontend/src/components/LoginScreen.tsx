@@ -8,8 +8,8 @@ type LoginScreenProps = {
 
 const ENVIRONMENTS: { id: LoginEnvironment; label: string; hint: string }[] = [
   { id: "sim", label: "模擬環境", hint: "本機沙盒・無安控・可隨意下單測試" },
-  { id: "yuanta", label: "元大帳號", hint: "正式實單環境（需帳號＋憑證）" },
-  { id: "sinopac", label: "永豐金帳號", hint: "正式實單環境（需 API Key＋憑證）" }
+  { id: "yuanta", label: "元大券商連線", hint: "依 .env 的 UAT/PROD 與下單開關連線" },
+  { id: "sinopac", label: "永豐金連線", hint: "依 .env 的模擬/正式與下單開關連線" }
 ];
 
 // 永豐金 Shioaji API Key 申請說明
@@ -247,18 +247,18 @@ export function LoginScreen({ onLoggedIn }: LoginScreenProps) {
             ) : null}
           </div>
 
-          <p className={`loginWarn ${isLive ? "" : "hidden"}`}>⚠️ 此為正式實單環境，登入後送出的委託將以真實帳戶成交。</p>
+          <p className={`loginWarn ${isLive ? "" : "hidden"}`}>⚠️ 此為券商連線；只有 .env 明確設定正式環境且開啟下單時，委託才可能送往真實帳戶。</p>
           {isLive ? (
             <label className="loginAck">
               <input type="checkbox" checked={ack} onChange={(event) => setAck(event.target.checked)} />
-              <span>我了解這是<b>正式實單</b>環境，將以 .env 設定的帳號連線、可下真實委託。</span>
+              <span>我了解這會連線券商帳號；實單環境與下單權限只以 .env 的明確設定為準。</span>
             </label>
           ) : null}
           {error ? <p className="loginError">{error}</p> : null}
         </div>
 
         <button type="button" className="loginSubmit" disabled={busy || (isLive && !ack)} onClick={() => void submit()}>
-          {busy ? <><Loader2 size={15} className="spin" /> 連線中…</> : `登入${isLive ? "（實單）" : "（模擬）"}`}
+          {busy ? <><Loader2 size={15} className="spin" /> 連線中…</> : `登入${isLive ? "（券商）" : "（模擬）"}`}
         </button>
       </div>
     </div>

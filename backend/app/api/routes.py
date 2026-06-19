@@ -1,3 +1,4 @@
+import os
 import time as time_module
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -11,6 +12,7 @@ from ..market_data.index_sampler import get_sampled_points
 from ..market_data.jumbo_repository import load_jumbo_data
 from ..market_data.repository import get_today_candidates
 from ..trading.mit import cancel_mit_order, clear_stale_mit_orders, create_mit_order, list_mit_orders
+from ..trading.orders import submit_order
 from ..trading.risk import audit_order, preview_order, set_kill_switch
 from ..trading.risk import is_kill_switch_enabled
 from ..trading.schemas import (
@@ -57,6 +59,13 @@ _KLINE_CACHE: dict[str, tuple[str, list[KLinePoint]]] = {}
 # is heavy and goes through the serialized SDK lock.
 _INDEX_TICK_CACHE: dict[str, tuple[str, float, list[dict[str, Any]]]] = {}
 INDEX_TICK_TTL = 60.0
+
+
+def _require_connected_client():
+    client = get_active_client()
+    if not client.status().connected:
+        raise HTTPException(status_code=401, detail="尚未登入或連線券商，無法查詢券商資料。")
+    return client
 
 
 def _index_points_from_ticks(ticks) -> list[dict[str, Any]]:
@@ -321,11 +330,12 @@ def yuanta_disconnect() -> YuantaStatus:
     return get_active_client().disconnect()
 
 
-@router.get("/quotes", response_model=list[QuoteResponse])
+@router.get("/quotes", response_model=list[QuoteResponse], dependencies=[Depends(require_api_key)])
 def quotes(
     symbols: str = Query(default=""),
     market: str = Query(default="TWSE"),
 ) -> list[QuoteResponse]:
+    _require_connected_client()
     selected = [item.strip() for item in symbols.split(",") if item.strip()]
     if not selected:
         selected = [get_settings().default_symbol]
@@ -339,12 +349,12 @@ def quotes(
 @router.get("/positions", response_model=list[Position], dependencies=[Depends(require_api_key)])
 def positions() -> list[Position]:
     try:
-        return get_active_client().get_positions()
+        return _require_connected_client().get_positions()
     except YuantaClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
-@router.get("/kline", response_model=list[KLinePoint])
+@router.get("/kline", response_model=list[KLinePoint], dependencies=[Depends(require_api_key)])
 def kline(
     symbol: str = Query(..., min_length=2, max_length=12),
     market: str = Query(default="TWSE"),
@@ -353,12 +363,12 @@ def kline(
 ) -> list[KLinePoint]:
     selected_date = date or datetime.now().strftime("%Y/%m/%d")
     try:
-        return get_active_client().get_kline(symbol, market, selected_date, selected_date, kline_type)
+        return _require_connected_client().get_kline(symbol, market, selected_date, selected_date, kline_type)
     except YuantaClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
-@router.get("/index-intraday")
+@router.get("/index-intraday", dependencies=[Depends(require_api_key)])
 def index_intraday(
     market: str = Query(..., pattern="^(TSE|OTC)$"),
     date: str = Query(default=""),
@@ -366,14 +376,18 @@ def index_intraday(
     market_key = market.upper()
     spec = INDEX_SYMBOLS[market_key]
     selected_date = date or datetime.now().strftime("%Y/%m/%d")
-    client = get_active_client()
+    client = _require_connected_client()
     quote: QuoteResponse | None = None
     rows: list[KLinePoint] = []
 
     try:
-        # Served from the push-fed cache when subscribed, avoiding an extra
-        # serialized SDK round-trip that competes with kline queries.
-        quotes = get_quotes_prefer_live([spec["symbol"]])
+        # 指數的當日「開/高/低/前收」必須取新鮮快照。推播快取對指數只會 patch 現價
+        # (deal)，其餘 OHLC 凍結在「首次訂閱當天」的種子值，跨日後會嚴重失真——最高/
+        # 最低/前收停在舊盤、H/L 標記脫離線圖（本次回報的根因）。故改打一次新鮮報價；
+        # 若新鮮查詢取不到，再退回推播快取，避免完全沒有報價。
+        quotes = client.get_quotes([spec["symbol"]], spec["quote_market"])
+        if not quotes:
+            quotes = get_quotes_prefer_live([spec["symbol"]])
         quote = quotes[0] if quotes else None
     except YuantaClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -433,51 +447,17 @@ def order_preview(order: OrderRequest) -> OrderPreview:
     return preview
 
 
-# 下單節流：滑動視窗每 2 秒最多 N 筆，擋失控迴圈/重送洪水（對正常手動下單寬鬆無感）。
-_ORDER_RATE_WINDOW = 2.0
-_ORDER_RATE_MAX = 20
-_recent_order_times: list[float] = []
-
-
 @router.post("/orders/send", response_model=OrderResult, dependencies=[Depends(require_api_key)])
 def send_order(order: OrderRequest) -> OrderResult:
     if not get_login_state().logged_in:
         raise HTTPException(status_code=401, detail="尚未登入，無法下單。")
-    now = time_module.monotonic()
-    _recent_order_times[:] = [t for t in _recent_order_times if now - t < _ORDER_RATE_WINDOW]
-    if len(_recent_order_times) >= _ORDER_RATE_MAX:
-        return OrderResult(accepted=False, mode="blocked", message="下單頻率過高，已暫時擋下，請稍候再試。")
-    _recent_order_times.append(now)
-    # 風控停損（kill switch）：對「所有環境含模擬」一律擋下，避免「以為已停損、實際仍成交」。
-    if is_kill_switch_enabled():
-        audit_order(order, "blocked", "blocked", "風控停損啟用中，已擋下委託。")
-        return OrderResult(accepted=False, mode="blocked", message="風控停損啟用中，已擋下委託。")
-    # 模擬沙盒：無其他安控、可隨意下單，跳過風控預覽（但停損仍生效，見上）。
-    if not is_sim_session():
-        # 市價單需即時參考價估算金額（讓金額上限對市價單也生效）。
-        reference_price: float | None = None
-        try:
-            quotes = get_quotes_prefer_live([order.symbol])
-            if quotes and quotes[0].deal_price:
-                reference_price = float(quotes[0].deal_price)
-        except Exception:  # noqa: BLE001
-            reference_price = None
-        preview = preview_order(order, reference_price=reference_price)
-        if not preview.accepted:
-            audit_order(order, "blocked", "blocked", preview.message)
-            return OrderResult(accepted=False, mode="blocked", message=preview.message)
-
     try:
-        result = get_active_client().send_stock_order(order)
+        return submit_order(order, source="manual", raise_broker_errors=True)
     except YuantaClientError as exc:
-        audit_order(order, "live", "error", str(exc))
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    audit_order(order, result.mode, "accepted" if result.accepted else "blocked", result.message)
-    return result
 
-
-@router.get("/tick-detail")
+@router.get("/tick-detail", dependencies=[Depends(require_api_key)])
 def tick_detail(
     symbol: str = Query(..., min_length=2, max_length=12),
     market: str = Query(default="TWSE"),
@@ -485,7 +465,7 @@ def tick_detail(
     count: int = Query(default=5000),
 ) -> list[dict[str, Any]]:
     try:
-        rows = get_active_client().get_tick_detail(symbol, market, select_type, count)
+        rows = _require_connected_client().get_tick_detail(symbol, market, select_type, count)
     except YuantaClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return [row.model_dump() for row in rows]
@@ -493,7 +473,9 @@ def tick_detail(
 
 @router.get("/debug/raw-trades", dependencies=[Depends(require_api_key)])
 def debug_raw_trades() -> list[str]:
-    client = get_active_client()
+    if os.getenv("DEBUG_RAW_TRADES", "NO").upper() != "YES":
+        raise HTTPException(status_code=404, detail="debug endpoint is disabled.")
+    client = _require_connected_client()
     api = getattr(client, "_api", None)
     if api is None or not hasattr(api, "list_trades"):
         return ["no shioaji api"]
@@ -521,7 +503,7 @@ def working_orders(status: str = "unfilled") -> list[WorkingOrder]:
     四類分類（已成交/未完全成交/未成交/取消）由前端依 ok_qty、after_qty 與 cancelled 判斷。
     """
     try:
-        rows = [row for row in get_active_client().get_stock_orders() if row.order_no]
+        rows = [row for row in _require_connected_client().get_stock_orders() if row.order_no]
     except YuantaClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if status == "all":
@@ -537,13 +519,15 @@ def working_orders(status: str = "unfilled") -> list[WorkingOrder]:
 @router.get("/orders/trades", response_model=list[TradeRecord], dependencies=[Depends(require_api_key)])
 def order_trades() -> list[TradeRecord]:
     try:
-        return get_active_client().get_stock_trades()
+        return _require_connected_client().get_stock_trades()
     except YuantaClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.post("/orders/cancel", response_model=OrderResult, dependencies=[Depends(require_api_key)])
 def cancel_order(request: CancelOrderRequest) -> OrderResult:
+    if not get_login_state().logged_in:
+        raise HTTPException(status_code=401, detail="尚未登入，無法刪單。")
     order = OrderRequest(
         symbol=request.symbol,
         side=request.side,
@@ -556,7 +540,7 @@ def cancel_order(request: CancelOrderRequest) -> OrderResult:
         confirm_send_order=True,
     )
     try:
-        result = get_active_client().cancel_stock_order(order)
+        result = _require_connected_client().cancel_stock_order(order)
     except YuantaClientError as exc:
         audit_order(order, "cancel", "error", str(exc))
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -571,7 +555,8 @@ def mit_orders() -> list[MitOrderRecord]:
     # 已觸發(sent)的 MIT：以 order_no 回查當日委託回報的成交量，讓前端可顯示 已成交/部份成交/未成交。
     if any(r.status == "sent" and r.order_no for r in records):
         try:
-            by_no = {o.order_no: o for o in get_active_client().get_stock_orders() if o.order_no}
+            client = _require_connected_client()
+            by_no = {o.order_no: o for o in client.get_stock_orders() if o.order_no}
         except Exception:  # noqa: BLE001  # 回查失敗不影響清單顯示
             by_no = {}
         for record in records:

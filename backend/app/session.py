@@ -1,11 +1,12 @@
 """登入工作階段：依登入畫面選的環境設定憑證/金鑰、切換券商並連線。
 
 - sim：純本機沙盒，免任何安控與憑證，登入即可隨意下單。
-- yuanta / sinopac：實單環境，套用登入畫面填的帳號/憑證/金鑰（留白沿用 .env），
-  連線成功後開啟下單總開關（仍保有送單前確認等實單保護）。
+- yuanta / sinopac：券商連線，套用登入畫面填的憑證路徑（留白沿用 .env）。
+  不在程式內切換 PROD 或開啟下單總開關；實單能力只接受 .env 的明確設定。
 """
 
 from pathlib import Path
+import os
 
 from .broker import BROKER_LABELS, get_active_client, is_sim_session, set_active_broker
 from .config import get_settings
@@ -132,12 +133,11 @@ def _apply_fugle_key(req: LoginRequest, settings) -> None:
 
 
 def _reset_runtime_flags() -> None:
-    """把實單相關旗標還原為非實單安全預設，避免上一次實單登入殘留到 sim / 登出後
-    （否則 yuanta_enable_order 會永久 True、health 一直回報實單）。"""
+    """把曾被舊版登入流程修改過的旗標還原為 .env 設定，避免跨登入殘留。"""
     settings = get_settings()
-    settings.yuanta_enable_order = False
-    settings.yuanta_env = "UAT"
-    settings.shioaji_simulation = True
+    settings.yuanta_env = os.getenv("YUANTA_ENV", "UAT")
+    settings.yuanta_enable_order = os.getenv("YUANTA_ENABLE_ORDER", "NO").upper() == "YES"
+    settings.shioaji_simulation = os.getenv("SHIOAJI_SIMULATION", "YES").upper() == "YES"
 
 
 def _clear_runtime_certs() -> None:
@@ -182,19 +182,15 @@ def login(req: LoginRequest) -> LoginState:
         set_active_broker("sim")
         status = get_active_client().connect()
     elif req.environment == "yuanta":
-        # 帳號/密碼/憑證密碼一律由 .env 取得（settings 已載入），不再經前端記住/落盤。
+        # 帳號/密碼/憑證密碼一律由 .env 取得；登入不切換 PROD，也不開啟下單總開關。
         if cert_path:
             settings.yuanta_cert_path = cert_path
-        settings.yuanta_env = "PROD"
-        settings.yuanta_enable_order = True
         set_active_broker("yuanta")
         status = get_active_client().connect()
     elif req.environment == "sinopac":
-        # 帳號/Secret/憑證密碼一律由 .env 取得，不再經前端記住/落盤。
+        # 帳號/Secret/憑證密碼一律由 .env 取得；模擬/正式與下單開關只接受 .env 設定。
         if cert_path:
             settings.shioaji_ca_path = cert_path
-        settings.shioaji_simulation = False
-        settings.yuanta_enable_order = True  # 兩家共用的實單總開關
         set_active_broker("sinopac")
         status = get_active_client().connect()
     else:

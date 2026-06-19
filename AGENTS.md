@@ -29,17 +29,31 @@
 
 ```bash
 python3.11 --version    # 需要 Python 3.11.x
-node --version          # 前端需要 Node 18+（建議 20+）
+node --version          # 前端需要 Node 20+
 npm --version
 uname -sm               # 作業系統與架構（mac: Darwin arm64 / x86_64；Windows 改用 PowerShell）
 ```
 
 - macOS 沒有 `python3.11`：建議 `brew install python@3.11`。
-- Windows：到 python.org 安裝 3.11，並用 PowerShell 執行對應指令（把 `.venv/bin/` 換成 `.venv\Scripts\`）。
+- Windows：到 python.org 安裝 3.11，並安裝 Node 20+；用 PowerShell 執行對應指令（把 `.venv/bin/` 換成 `.venv\Scripts\`）。
 
 ---
 
 ## 2. 安裝相依套件
+
+優先使用 repo 內的一鍵安全腳本（會自動建立 `.env` / `frontend/.env`、產生一致的本機 `API_KEY`，並維持 UAT / 不開單）：
+
+```bash
+scripts/bootstrap.sh
+```
+
+若使用者明確要你裝好後直接啟動模擬環境，可用：
+
+```bash
+scripts/bootstrap.sh --start
+```
+
+腳本完成後仍要依第 5 步驗證前後端。如果腳本失敗，才改用下列手動指令逐步處理：
 
 ```bash
 # 後端：建立虛擬環境並安裝
