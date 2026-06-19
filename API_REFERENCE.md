@@ -34,10 +34,10 @@ S + 分公司代號(4) + 帳號(7)
 例如：
 
 ```text
-Sxxxxxxxxxxx
+S + 分公司代號4碼 + 帳號7碼
 ```
 
-你的 Mac 測試已確認需要填完整帳號，例如：
+Mac/Linux 測試需填完整帳號格式，例如：
 
 ```text
 YUANTA_ACCOUNT=Sxxxxxxxxxxx
